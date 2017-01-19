@@ -248,19 +248,19 @@ int main(int argc, char* argv[])
   while(true) {
     sin_size = sizeof their_addr;
     new_socket = accept(listen_socket, (struct sockaddr *)&their_addr, &sin_size); 
-    if(new_socket = -1) { // no one to talk to 
+    if(new_socket == -1) { // no one to talk to 
       perror("accept"); 
       continue; 
     }
-    
+     
 
     //network to printable (human readable) 
     inet_ntop(their_addr.ss_family, 
 	      get_in_addr((struct sockaddr *)&their_addr),
 	      s, sizeof s); 
-    printf("sever: got connection from %s\n", s); 
+    printf("server: got connection from %s\n", s); 
 
-    if(!fork()) {
+    if(!fork()) { //this is the child process
       close(listen_socket);
       if (send(new_socket, "Hello, memes!", 13, 0 ) == -1)
 	perror("send"); 
@@ -276,8 +276,3 @@ int main(int argc, char* argv[])
 }
 
 
-
-void accept_loop(){
-
-
-}
