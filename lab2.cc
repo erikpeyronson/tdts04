@@ -13,6 +13,9 @@
 #include <sys/wait.h>
 #include <signal.h>
 
+#define BACKLOG 10
+//#define port "8080"
+
 using namespace std;
 // making a socket() system call returns a socket descriptor
 // send() recv() are used for communication
@@ -169,7 +172,7 @@ int main(int argc, char* argv[])
   socklen_t sin_size; // sizeoff() the structure used in accept, safe to ignore
   struct sigaction sa; // process handler
   int yes=1;
-  char s[INET_ADDRSTRLEN]; // lenght of ip address
+  char s[INET6_ADDRSTRLEN]; // lenght of ip address
   int rv; // return value. error codes?
 
 
@@ -195,7 +198,8 @@ int main(int argc, char* argv[])
 
   for( p = servinfo; p!= NULL; p = p -> ai_next)
     {    
-      if((listen_socket = socket(p -> ai_family, p -> ai_socktype, p->ai_protocol) == -1)) // get file descriptor for p
+      if((listen_socket = socket(p -> ai_family, p -> ai_socktype, 
+				 p->ai_protocol)) == -1) // get file descriptor for p
 	{
 	  perror("server: socket"); // print error if socket not found
 	  continue;
@@ -218,6 +222,62 @@ int main(int argc, char* argv[])
 	
        */
     }
+
+  freeaddrinfo(servinfo); 
+
+  if(p == NULL) {
+    fprintf(stderr, " server: failed to bind\n");
+    exit(1); 
+  }
+
+  if(listen(listen_socket, BACKLOG) == -1) { //wait for a connector
+    perror("listen");
+    exit(1); 
+  }
+
+  sa.sa_handler = sigchld_handler; //zombie handling
+  sigemptyset(&sa.sa_mask); 
+  sa.sa_flags = SA_RESTART; 
+  if( sigaction(SIGCHLD, &sa, NULL) ==  -1 ){
+    perror("sigaction"); 
+    exit(1); 
+  }
+
+  printf("server: waiting for connections...\n"); 
+
+  while(true) {
+    sin_size = sizeof their_addr;
+    new_socket = accept(listen_socket, (struct sockaddr *)&their_addr, &sin_size); 
+    if(new_socket = -1) { // no one to talk to 
+      perror("accept"); 
+      continue; 
+    }
+    
+
+    //network to printable (human readable) 
+    inet_ntop(their_addr.ss_family, 
+	      get_in_addr((struct sockaddr *)&their_addr),
+	      s, sizeof s); 
+    printf("sever: got connection from %s\n", s); 
+
+    if(!fork()) {
+      close(listen_socket);
+      if (send(new_socket, "Hello, memes!", 13, 0 ) == -1)
+	perror("send"); 
+      close(new_socket); 
+      exit(0);
+    }
+    close(new_socket); 
+  }
+
+
+
   return 0;
 }
 
+
+
+void accept_loop(){
+
+
+}
