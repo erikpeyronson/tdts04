@@ -16,7 +16,7 @@
 #include <signal.h>
 
 #define BACKLOG 10
-#define MAXDATASIZE 100 //might need to increase
+#define MAXDATASIZE 1000//might need to increase
 //#define port "8080"
 
 
@@ -279,16 +279,19 @@ int main(int argc, char* argv[])
     cerr << "about to Make an addrinfo from the hostname" << endl; 
 
 
-    struct hostent * hs;
-    if( ((hs = gethostbyname( get_host.c_str()) == NULL)
-      {
-	herror("gethostbyname"); 
-	return 2; 
-      }
+    // struct hostent  *hs;
+    // hs = gethostbyname( get_host.c_str());
+    // // if( hs = gethostbyname( get_host.c_str()) == NULL)
+    // if( hs == NULL)
+    //   {
+    // 	herror("gethostbyname"); 
+    // 	return 2; 
+    //   }
       
       //we are here how tf do u get an ip from hs? xDDDD
-
-    if ((rv = getaddrinfo( hs->h_addr_list[0], "80", &hints, &inet_servinfo)) != 0) {
+    // cerr << hs->h_addr_list[0] -> s_addr << endl;
+    // cerr << hs->h_addr << endl;
+    if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
       fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
       return 1;
     }
@@ -318,17 +321,27 @@ int main(int argc, char* argv[])
 
     /*
       send the get request
-     */
-      if (send(inet_sockfd, buf_server, MAXDATASIZE-1, 0 ) == -1){
-	perror("send"); 
-      }
+    */
+    cerr << "Send the get request" << endl; 
+    
+    if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
+      perror("send"); 
+    }
 
-      if (recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 ) == -1){
-	perror("recv"); 
-      }
+    /*
+      recieve response
+    */
+    cerr << "Recive response " << endl;
 
-      copy(begin(buf_server),end(buf_server), ostream_iterator<char>(cout));//remote response
+    if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1){  
+    perror("recv"); 
+    }
 
+    buf_server[numbytes] = '\0'; 
+    cerr << "after recv()" << endl;
+   
+    copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
+    cerr << "after copy" << endl;
 
   
     /*
