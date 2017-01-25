@@ -17,6 +17,7 @@
 
 #define BACKLOG 10
 #define MAXDATASIZE 1000//might need to increase
+#define LOCALDATASIZE 100000 
 //#define port "8080"
 
 
@@ -25,130 +26,7 @@ using namespace std;
 
 
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes);
-
 void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket);
-// making a socket() system call returns a socket descriptor
-// send() recv() are used for communication
-/*
-  Stream Socket = SOCK_STREAM
-  HTTP uses this stream sent will arrive in the same order as sent TCP
-
-
-  Datagram Sockets  SOCK_DGRAM
-
-  connectionless may be out of order
-
-  # The needed structs
- 
-  struct addrinfo 
-  {
-  int              ai_flags;     // AI_PASSIVE, AI_CANONNAME, etc.
-  int              ai_family;    // AF_INET, AF_INET6, AF_UNSPEC
-  int              ai_socktype;  // SOCK_STREAM, SOCK_DGRAM
-  int              ai_protocol;  // use 0 for "any"
-  size_t           ai_addrlen;   // size of ai_addr in bytes
-  struct sockaddr *ai_addr;      // struct sockaddr_in or _in6
-  char            *ai_canonname; // full canonical hostname
-
-  struct addrinfo *ai_next;      // linked list, next node
-  };
-
-  Usage : load up the struct with values, call getaddrinfo() which gives a pointer
-  to a linked list of these structs
-
-
-
-
-  struct sockaddr {
-  unsigned short    sa_family;    // address family, AF_xxx
-  char              sa_data[14];  // 14 bytes of protocol address
-  };
-
-  struct sockaddr_in {
-  short int          sin_family;  // Address family, AF_INET
-  unsigned short int sin_port;    // Port number
-  struct in_addr     sin_addr;    // Internet address
-  unsigned char      sin_zero[8]; // Same size as struct sockaddr
-  };
-
-  Usage: create your own struct sockaddr_in (in=internet) that is used for ipv4
-  IMPORTANT sockaddr_in and socaddr can be cast to eachother aka connect can be called
-  with our own sockaddr_in casted last minute
-
-
-  // (IPv4 only--see struct in6_addr for IPv6)
-
-  // Internet address (a structure for historical reasons)
-  struct in_addr {
-  uint32_t s_addr; // that's a 32-bit int (4 bytes)
-  };
-
-  usage: the member sin_addr in sockaddr is of this type. Used to store the ip
-
-
-  FUNCTION inet_pton() converts and ip in dot format to inet_addr
-  EXAMPLE inet_pton(AF_INET, "10.12.110.57", &(sa.sin_addr)); // IPv4
-
-  FUNCTION inet_ntop converts an inet_addr to dot format
-  inet_ntop(AF_INET, &(sa.sin_addr), ip4, INET_ADDRSTRLEN);
-
-
-  ### SYSTEM CALLS
-
-  # getaddrinfo() - sets up the structs you need later on
-
-  int getaddrinfo(const char *node,     // e.g. "www.example.com" or IP
-  const char *service,  // e.g. "http" or port number
-  const struct addrinfo *hints,
-  struct addrinfo **res);
-
-  FUNCTION gai_strerror() prints the error message from getaddrinfo
-
-
-
-  # socket() - get the file descriptor
-
-  int socket(int domain, int type, int protocol); 
-
-  domain
-  type = what type of socket
-  int protocol = what protocol can be filled with getprotobyname() "tc" or "udp"
-
-  you feed getaddrinfo() into socket()
-
-
-
-  # bind() - associate the socket with a port on the local machine unessecary in clients
-
-  int bind(int sockfd, struct sockaddr *my_addr, int addrlen);
-
-  sockfd = socket file descriptor returned by socket()
-
-
-  # connect() - connect to a remote host
-
-  int connect(int sockfd, struct sockaddr *serv_addr, int addrlen);
-  sockfd = socket file descriptor that you got from socket()
-
-
-  # listen() wait for incomming connection.
-
-  listen() then accept() 
-
-  bind() is called first then listen() then accept()
-
-  # accept() you accept() the calls on the listen() port which someone tries to connect() to
-
-  int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen); 
-
-
-  send() recv() 
-
-  int send(int sockfd, const void *msg, int len, int flags); 
-
-
-*/
-
 
 
 // Function for handling child processes
@@ -347,21 +225,6 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
 	Make an addrinfo from the hostname
 	Note: do we want to use another port than 80? 
       */
-
-
-
-      // struct hostent  *hs;
-      // hs = gethostbyname( get_host.c_str());
-      // // if( hs = gethostbyname( get_host.c_str()) == NULL)
-      // if( hs == NULL)
-      //   {
-      // 	herror("gethostbyname"); 
-      // 	return 2; 
-      //   }
-      
-      //we are here how tf do u get an ip from hs? xDDDD
-      // cerr << hs->h_addr_list[0] -> s_addr << endl;
-      // cerr << hs->h_addr << endl;
       cerr << "getaddrinfo" << endl; 
       int rv;
       if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
@@ -406,15 +269,33 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
       */
       cerr << "Recieve response " << endl;
 
-      if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1){  
-	perror("recv"); 
+
+      //this should be a recieve loop
+      int totbytes{}; 
+      char totbuf[LOCALDATASIZE];
+      while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0 ){ //WE GET STUCK HERE ON THE LAST ITERATION 
+	if( numbytes == -1)
+	  perror("recv");
+	cerr << "totbytes"<< totbytes << endl; 
+	cerr << "numbytes"<< numbytes << endl; 
+
+	copy(begin(buf_server),end(buf_server),begin(totbuf)+totbytes); 
+	totbytes+=numbytes;
+	
       }
+      cerr << "numbytes (shud be 0)" << numbytes << endl; 
+
+      // if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1){  
+      // 	perror("recv"); 
+      // }
 
       buf_server[numbytes] = '\0'; 
       cerr << "after recv()" << endl;
    
       copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
       cerr << "after copy" << endl;
+
+
 
       /*
 	forward the response to our bowser
