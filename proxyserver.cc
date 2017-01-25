@@ -221,7 +221,7 @@ int main(int argc, char* argv[])
 
   printf("server: waiting for connections...\n"); 
 
-  while(true) { //accept loop
+  while(true) { //accept loop FORK in the loop
     sin_size = sizeof their_addr;
     new_socket = accept(listen_socket, (struct sockaddr *)&their_addr, &sin_size); 
     if(new_socket == -1) { // no one to talk to 
@@ -229,6 +229,11 @@ int main(int argc, char* argv[])
       continue; 
     }
      
+
+ 
+      
+ 
+
 
     //network to printable (human readable) 
     inet_ntop(their_addr.ss_family, 
@@ -238,128 +243,129 @@ int main(int argc, char* argv[])
 
 
 
-    /*
-      rather than sending a string back to the port connect to the web server
+    if(!fork()) { //this is the child process
+      // is close(listen_socket) global?????
+      //      close(listen_socket);//child doesn't need the listener
 
-      send forward the http message
+      /*
+	rather than sending a string back to the port connect to the web server
+	send forward the http message
+	listen on same port
+	send content back to browser
+      */
 
-      listen on same port
-
-      send content back to browser
-
-    */
-    if ((numbytes = recv(new_socket, buf_server, MAXDATASIZE-1, 0)) == -1) {
-      perror("recv");
-      exit(1);
-    }
-    buf_server[numbytes] = '\0';
-    //  copy(begin(buf_server),end(buf_server), ostream_iterator<char>(cout));//get req looking good
+      if ((numbytes = recv(new_socket, buf_server, MAXDATASIZE-1, 0)) == -1) {
+	perror("recv");
+	exit(1);
+      }
+      buf_server[numbytes] = '\0';
+      cerr << "numbytes from recv(): " << numbytes << endl; 
+      cerr << buf_server << endl; 
+      //  copy(begin(buf_server),end(buf_server), ostream_iterator<char>(cout));//get req looking good
     
     
 
 
-    /*
-      Get the hostname from the get request
-    */
-    string get_host{buf_server};
-    //cerr << "Get host before filter" << get_host << endl;
-    istringstream iss(get_host);
-    iss.ignore(100, '\n');
-    getline(iss, get_host);
-    istringstream iss2(get_host);
-    iss2.ignore(6, ' ');
-    iss2 >> get_host;
-    //cout << "hostname from get request: " << get_host << endl;
+      /*
+	Get the hostname from the get request
+      */
+      string get_host{buf_server};
+      //cerr << "Get host before filter" << get_host << endl;
+      istringstream iss(get_host);
+      iss.ignore(100, '\n');
+      getline(iss, get_host);
+      istringstream iss2(get_host);
+      iss2.ignore(6, ' ');
+      iss2 >> get_host;
+      //cout << "hostname from get request: " << get_host << endl;
 
 
-    /*
-      Make an addrinfo from the hostname
-      Note: do we want to use another port than 80? 
-    */
-    cerr << "about to Make an addrinfo from the hostname" << endl; 
+      /*
+	Make an addrinfo from the hostname
+	Note: do we want to use another port than 80? 
+      */
 
 
-    // struct hostent  *hs;
-    // hs = gethostbyname( get_host.c_str());
-    // // if( hs = gethostbyname( get_host.c_str()) == NULL)
-    // if( hs == NULL)
-    //   {
-    // 	herror("gethostbyname"); 
-    // 	return 2; 
-    //   }
+
+      // struct hostent  *hs;
+      // hs = gethostbyname( get_host.c_str());
+      // // if( hs = gethostbyname( get_host.c_str()) == NULL)
+      // if( hs == NULL)
+      //   {
+      // 	herror("gethostbyname"); 
+      // 	return 2; 
+      //   }
       
       //we are here how tf do u get an ip from hs? xDDDD
-    // cerr << hs->h_addr_list[0] -> s_addr << endl;
-    // cerr << hs->h_addr << endl;
-    if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
-      fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
-      return 1;
-    }
-    
-    /*
-      connect the client to the internet server
-    */
-    cerr << "about to connect the client to the internet server" << endl; 
-
-    for(p = inet_servinfo; p != NULL; p = p->ai_next) {
-      if ((inet_sockfd = socket(p->ai_family, p->ai_socktype,
-				p->ai_protocol)) == -1) {
-	perror("client to inet: socket");
-	continue;
+      // cerr << hs->h_addr_list[0] -> s_addr << endl;
+      // cerr << hs->h_addr << endl;
+      cerr << "getaddrinfo" << endl; 
+      if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
+	fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
+	return 1;
       }
-      if (connect(inet_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-	close(inet_sockfd);
-	perror("client to inet: connect");
-	continue;
-      }
-      break;
-    }
-    if (p == NULL) {
-      fprintf(stderr, "client to inet: failed to connect\n");
-      return 2;
-    }
-
-    /*
-      send the get request
-    */
-    cerr << "Send the get request" << endl; 
     
-    if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
-      perror("send"); 
-    }
+      /*
+	connect the client to the internet server
+      */
+      cerr << "about to connect the client to the internet server" << endl; 
 
-    /*
-      recieve response
-    */
-    cerr << "Recive response " << endl;
+      for(p = inet_servinfo; p != NULL; p = p->ai_next) {
+	if ((inet_sockfd = socket(p->ai_family, p->ai_socktype,
+				  p->ai_protocol)) == -1) {
+	  perror("client to inet: socket");
+	  continue;
+	}
+	if (connect(inet_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+	  close(inet_sockfd);
+	  perror("client to inet: connect");
+	  continue;
+	}
+	break;
+      }
+      if (p == NULL) {
+	fprintf(stderr, "client to inet: failed to connect\n");
+	return 2;
+      }
 
-    if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1){  
-    perror("recv"); 
-    }
+      /*
+	send the get request
+      */
+      cerr << "Send the get request" << endl; 
+    
+      if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
+	perror("send"); 
+      }
 
-    buf_server[numbytes] = '\0'; 
-    cerr << "after recv()" << endl;
+      /*
+	recieve response
+      */
+      cerr << "Recive response " << endl;
+
+      if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1){  
+	perror("recv"); 
+      }
+
+      buf_server[numbytes] = '\0'; 
+      cerr << "after recv()" << endl;
    
-    copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
-    cerr << "after copy" << endl;
+      copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
+      cerr << "after copy" << endl;
 
-  
-    /*
+      /*
+	forward the response to our bowser
+      */
 
-     */
-
-    if(!fork()) { //this is the child process
-      close(listen_socket);
-
-
-      if (send(new_socket, "Hello, memes!", 13, 0 ) == -1){
+      if (send(new_socket, buf_server, numbytes, 0 ) == -1){
 	perror("send"); 
       }
 
       close(new_socket); 
       exit(0);
-    }
-    close(new_socket); 
+    } //end of fork
+     
+
+    close(new_socket); //parent doesn't need the child's socket
   }
 
 
@@ -413,3 +419,5 @@ void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes)
 
   return; 
 }
+
+
