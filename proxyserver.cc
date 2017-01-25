@@ -244,22 +244,16 @@ int main(int argc, char* argv[])
 
 
 
-    if(!fork()) { //this is the child process
-      // is close(listen_socket) global?????
-      //      close(listen_socket);//child doesn't need the listener
+    if(!fork()) 
+      { 
+	close(listen_socket);//child doesn't need the listener
 
-      /*
-	rather than sending a string back to the port connect to the web server
-	send forward the http message
-	listen on same port
-	send content back to browser
-      */
-      childtasks(hints, p, new_socket); 
- 
+	childtasks(hints, p, new_socket); 
+      
 
-      close(new_socket); 
-      exit(0);
-    } //end of fork
+	close(new_socket); 
+	exit(0);
+      } //end of fork
      
 
     close(new_socket); //parent doesn't need the child's socket
