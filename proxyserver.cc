@@ -54,8 +54,7 @@ void *get_in_addr(struct sockaddr *sa)
 int main(int argc, char* argv[])
 {
   int listen_socket, new_socket;
-
-  // hints = template, *servinfo = info about server, *p = loop condition to traverse servinfo
+         
   struct addrinfo hints, *servinfo, *p;
 
   struct sockaddr_storage sockaddr_storage, their_addr; // addressinfo from the connecting part?
@@ -122,9 +121,7 @@ int main(int argc, char* argv[])
 	close(listen_socket);//child doesn't need the listener
 
 	childtasks(hints, p, new_socket); 
-	cerr  << "banans" << endl;
-	close(new_socket);
- 	cerr  << "banans reborn" << endl;
+	close(new_socket); 
 	exit(0);
       } //end of fork
 
@@ -199,15 +196,15 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     exit(1);
   }
   buf_server[numbytes] = '\0';
-  cerr << "numbytes from recv(): " << numbytes << endl; 
-  cerr << buf_server << endl; 
+  //cerr << "numbytes from recv(): " << numbytes << endl; 
+  //cerr << buf_server << endl; 
   //  copy(begin(buf_server),end(buf_server), ostream_iterator<char>(cout));//get req looking good
     
   /*
     Get the hostname from the get request
   */
   string get_host{buf_server};
-  //cerr << "Get host before filter" << get_host << endl;
+  ////cerr << "Get host before filter" << get_host << endl;
   istringstream iss(get_host);
   iss.ignore(100, '\n');
   getline(iss, get_host);
@@ -236,7 +233,7 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     Make an addrinfo from the hostname
     Note: do we want to use another port than 80? 
   */
-  cerr << "getaddrinfo" << endl; 
+  //cerr << "getaddrinfo" << endl; 
   int rv;
   if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
     fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
@@ -246,7 +243,7 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   /*
     connect the client to the internet server
   */
-  cerr << "about to connect the client to the internet server" << endl; 
+  //cerr << "about to connect the client to the internet server" << endl; 
 
   for(p = inet_servinfo; p != NULL; p = p->ai_next) {
     if ((inet_sockfd = socket(p->ai_family, p->ai_socktype,
@@ -269,7 +266,7 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   /*
     send the get request
   */
-  cerr << "Send the get request" << endl; 
+  //cerr << "Send the get request" << endl; 
     
   if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
     perror("send"); 
@@ -278,49 +275,49 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   /*
     recieve response
   */
-  cerr << "Recieve response " << endl;
+  //cerr << "Recieve response " << endl;
 
 
   //this should be a recieve loop
   int totbytes{}; 
   char totbuf[LOCALDATASIZE];
 
-  //WE GET STUCK HERE ON THE LAST ITERATION 
-  while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0 )
+  
+  while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0)
     { 
       if( numbytes == -1)
 	{
 	  perror("recv");
 	}
-      cerr << "totbytes"<< totbytes << endl; 
-      cerr << "numbytes"<< numbytes << endl;
+      //cerr << "totbytes"<< totbytes << endl; 
+      //cerr << "numbytes"<< numbytes << endl;
     
-      cerr << endl << "Copy recieved message" << endl;
+      //cerr << endl << "Copy recieved message" << endl;
 
       copy(begin(buf_server),end(buf_server),begin(totbuf)+totbytes);    
       totbytes+=numbytes;
 	
     }
-  cerr << "numbytes (shud be 0)" << numbytes << endl << endl; 
+  //cerr << "numbytes (shud be 0)" << numbytes << endl << endl; 
 
  
   // if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1)
   // {  
   // 	perror("recv"); 
   // }
-
-  buf_server[numbytes] = '\0'; 
-  cerr << "after recv()" << endl;
+  totbuf[totbytes] = '\0'; 
+  // buf_server[numbytes] = '\0'; 
+  //cerr << "after recv()" << endl;
    
-  copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
+  copy(begin(totbuf), begin(totbuf) + totbytes, ostream_iterator<char>(cout));//remote response
   cerr << "after copy" << endl << endl;
-
+  //exit(1);
 
   /* 
      forward the response to our bowser
   */
 
-  if (send(new_socket, buf_server, numbytes, 0 ) == -1){
+  if (send(new_socket, totbuf, totbytes, 0 ) == -1){
     perror("send"); 
   }
 
