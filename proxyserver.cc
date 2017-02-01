@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iterator>
 #include <sstream>
+#include <algorithm>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,10 +90,10 @@ int main(int argc, char* argv[])
     }
 
   listen_and_bind(servinfo, listen_socket, yes); 
-
   sa.sa_handler = sigchld_handler; //zombie handling
   sigemptyset(&sa.sa_mask); 
   sa.sa_flags = SA_RESTART; 
+
   if( sigaction(SIGCHLD, &sa, NULL) ==  -1 ){
     perror("sigaction"); 
     exit(1); 
@@ -107,12 +108,6 @@ int main(int argc, char* argv[])
       perror("accept"); 
       continue; 
     }
-     
-
- 
-      
- 
-
 
     //network to printable (human readable) 
     inet_ntop(their_addr.ss_family, 
@@ -127,23 +122,23 @@ int main(int argc, char* argv[])
 	close(listen_socket);//child doesn't need the listener
 
 	childtasks(hints, p, new_socket); 
-      
-
-	close(new_socket); 
+	cerr  << "banans" << endl;
+	close(new_socket);
+ 	cerr  << "banans reborn" << endl;
 	exit(0);
       } //end of fork
-     
 
     close(new_socket); //parent doesn't need the child's socket
   }
-
-
 
   return 0;
 }
 
 
-
+//
+// function listen_and_bind
+// listens for connections on port, opens binds to socket
+//
 
 
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes)
@@ -188,6 +183,10 @@ void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes)
 
   return; 
 }
+//
+// Function child tasks
+// Function that listens for and accepts messages
+//
 
 void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   int inet_sockfd;
@@ -195,115 +194,136 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   int numbytes; // size of message recieved
   struct addrinfo *inet_servinfo; //addrinfo of the remote host
 
-     if ((numbytes = recv(new_socket, buf_server, MAXDATASIZE-1, 0)) == -1) {
-	perror("recv");
-	exit(1);
-      }
-      buf_server[numbytes] = '\0';
-      cerr << "numbytes from recv(): " << numbytes << endl; 
-      cerr << buf_server << endl; 
-      //  copy(begin(buf_server),end(buf_server), ostream_iterator<char>(cout));//get req looking good
+  if ((numbytes = recv(new_socket, buf_server, MAXDATASIZE-1, 0)) == -1) {
+    perror("recv");
+    exit(1);
+  }
+  buf_server[numbytes] = '\0';
+  cerr << "numbytes from recv(): " << numbytes << endl; 
+  cerr << buf_server << endl; 
+  //  copy(begin(buf_server),end(buf_server), ostream_iterator<char>(cout));//get req looking good
     
+  /*
+    Get the hostname from the get request
+  */
+  string get_host{buf_server};
+  //cerr << "Get host before filter" << get_host << endl;
+  istringstream iss(get_host);
+  iss.ignore(100, '\n');
+  getline(iss, get_host);
+  istringstream iss2(get_host);
+  iss2.ignore(6, ' ');
+  iss2 >> get_host;
+  //cout << "hostname from get request: " << get_host << endl;
+
+ 
+
+ /*
+    TODO: Change connection: keep-alive to Connection: close
+   */
+  
+  string buf_server_string{buf_server};
+  auto pos = buf_server_string.find("Connection:"); // will give position of first char of keep_alive
+  
+  buf_server_string.replace(pos+12, 10, "close");
+
+  memset(&buf_server, 0, sizeof buf_server);
+  copy(begin(buf_server_string),end(buf_server_string), begin(buf_server));
+  buf_server[buf_server_string.size()] = '\0';
+
+
+  /*
+    Make an addrinfo from the hostname
+    Note: do we want to use another port than 80? 
+  */
+  cerr << "getaddrinfo" << endl; 
+  int rv;
+  if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
+    fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
+    exit(1);
+  }
     
+  /*
+    connect the client to the internet server
+  */
+  cerr << "about to connect the client to the internet server" << endl; 
 
+  for(p = inet_servinfo; p != NULL; p = p->ai_next) {
+    if ((inet_sockfd = socket(p->ai_family, p->ai_socktype,
+			      p->ai_protocol)) == -1) {
+      perror("client to inet: socket");
+      continue;
+    }
+    if (connect(inet_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+      close(inet_sockfd);
+      perror("client to inet: connect");
+      continue;
+    }
+    break;
+  }
+  if (p == NULL) {
+    fprintf(stderr, "client to inet: failed to connect\n");
+    exit(2);
+  }
 
-      /*
-	Get the hostname from the get request
-      */
-      string get_host{buf_server};
-      //cerr << "Get host before filter" << get_host << endl;
-      istringstream iss(get_host);
-      iss.ignore(100, '\n');
-      getline(iss, get_host);
-      istringstream iss2(get_host);
-      iss2.ignore(6, ' ');
-      iss2 >> get_host;
-      //cout << "hostname from get request: " << get_host << endl;
-
-
-      /*
-	Make an addrinfo from the hostname
-	Note: do we want to use another port than 80? 
-      */
-      cerr << "getaddrinfo" << endl; 
-      int rv;
-      if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
-	fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
-	exit(1);
-      }
+  /*
+    send the get request
+  */
+  cerr << "Send the get request" << endl; 
     
-      /*
-	connect the client to the internet server
-      */
-      cerr << "about to connect the client to the internet server" << endl; 
+  if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
+    perror("send"); 
+  }
 
-      for(p = inet_servinfo; p != NULL; p = p->ai_next) {
-	if ((inet_sockfd = socket(p->ai_family, p->ai_socktype,
-				  p->ai_protocol)) == -1) {
-	  perror("client to inet: socket");
-	  continue;
-	}
-	if (connect(inet_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-	  close(inet_sockfd);
-	  perror("client to inet: connect");
-	  continue;
-	}
-	break;
-      }
-      if (p == NULL) {
-	fprintf(stderr, "client to inet: failed to connect\n");
-	exit(2);
-      }
-
-      /*
-	send the get request
-      */
-      cerr << "Send the get request" << endl; 
-    
-      if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
-	perror("send"); 
-      }
-
-      /*
-	recieve response
-      */
-      cerr << "Recieve response " << endl;
+  /*
+    recieve response
+  */
+  cerr << "Recieve response " << endl;
 
 
-      //this should be a recieve loop
-      int totbytes{}; 
-      char totbuf[LOCALDATASIZE];
-      while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0 ){ //WE GET STUCK HERE ON THE LAST ITERATION 
-	if( numbytes == -1)
+  //this should be a recieve loop
+  int totbytes{}; 
+  char totbuf[LOCALDATASIZE];
+
+  //WE GET STUCK HERE ON THE LAST ITERATION 
+  while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0 )
+    { 
+      if( numbytes == -1)
+	{
 	  perror("recv");
-	cerr << "totbytes"<< totbytes << endl; 
-	cerr << "numbytes"<< numbytes << endl; 
+	}
+      cerr << "totbytes"<< totbytes << endl; 
+      cerr << "numbytes"<< numbytes << endl;
+    
+      cerr << endl << "Copy recieved message" << endl;
 
-	copy(begin(buf_server),end(buf_server),begin(totbuf)+totbytes); 
-	totbytes+=numbytes;
+      copy(begin(buf_server),end(buf_server),begin(totbuf)+totbytes);    
+      totbytes+=numbytes;
 	
-      }
-      cerr << "numbytes (shud be 0)" << numbytes << endl; 
+    }
+  cerr << "numbytes (shud be 0)" << numbytes << endl << endl; 
 
-      // if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1){  
-      // 	perror("recv"); 
-      // }
+ 
+  // if ( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0 )) == -1)
+  // {  
+  // 	perror("recv"); 
+  // }
 
-      buf_server[numbytes] = '\0'; 
-      cerr << "after recv()" << endl;
+  buf_server[numbytes] = '\0'; 
+  cerr << "after recv()" << endl;
    
-      copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
-      cerr << "after copy" << endl;
+  copy(begin(buf_server), begin(buf_server) + numbytes, ostream_iterator<char>(cout));//remote response
+  cerr << "after copy" << endl << endl;
 
 
+  /* 
+     forward the response to our bowser
+  */
 
-      /*
-	forward the response to our bowser
-      */
+  if (send(new_socket, buf_server, numbytes, 0 ) == -1){
+    perror("send"); 
+  }
 
-      if (send(new_socket, buf_server, numbytes, 0 ) == -1){
-	perror("send"); 
-      }
 }
 
 
