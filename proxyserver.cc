@@ -19,7 +19,7 @@
 #define BACKLOG 10
 #define MAXDATASIZE 15000//might need to increase
 #define LOCALDATASIZE 8000000
-//#define port "8080"
+
 
 
 
@@ -28,7 +28,7 @@ using namespace std;
 
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes);
 void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket);
-bool bad_words(string & data, int new_socket); //takes a data and a socket. for bad GETs, redirects a 302 to that socket. 
+bool bad_words(string & data); //takes a data and a socket. for bad GETs, redirects a 302 to that socket. 
 
 
 // Function for handling child processes
@@ -66,9 +66,14 @@ int main(int argc, char* argv[])
   int rv; // return value. error codes?
 
 
-  //port = argv[1];			// set port number from command line
-
-  char port[]{"8080"}; 		// the port we are using, will later be set on cli
+  if(argc < 2){
+    cerr << "Usage: ./proxyserver PORT (Example: ./proxyserver 8080)\n";
+  }
+  string portstring = argv[1];
+  char port[87];
+  copy(portstring.begin(), portstring.end(), begin(port));
+  port[portstring.size()] = '\0';
+  
   memset(&hints, 0, sizeof hints); // make sure hints is empty
 
   hints.ai_family = AF_UNSPEC;	// both ipv6 and ipv4
@@ -200,16 +205,16 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   /*
     Filter the get request
   */
-  // string get_request{buf_server}; 
-  // if(bad_words(get_request, new_socket)){
+  string get_request{buf_server}; 
+  if(bad_words(get_request)){
    
-  //  if (send(new_socket, 
-  // 	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html\r\n\r\n",
-  // 	       89, 0 ) == -1){
-  // 	perror("302"); 
-  //  }
-  //  exit(1);
-  // }
+   if (send(new_socket, 
+  	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html\r\n\r\n",
+  	       89, 0 ) == -1){
+  	perror("302"); 
+   }
+   exit(1);
+  }
   
   
 
@@ -304,22 +309,11 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
 
   totbuf[totbytes] = '\0'; 
 
-  /*   
-  copy(begin(totbuf), begin(totbuf) + totbytes, ostream_iterator<char>(cout));//remote response
-  cerr << "after copy" << endl << endl;
-  //exit(1);
-  */
-
-
   /*
     Filter the response
    */
   string message{totbuf}; // (totbuf, totbytes); 
-  //  copy(begin(totbuf), begin(totbuf) + totbytes, begin(message));
-
-  cerr << "####\n#message\n####\n" << message << "####"<< endl; 
-  // exit(1);
-  if(bad_words(message, new_socket)){    
+  if(bad_words(message)){    
    if (send(new_socket, 
 	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html\r\n\r\n",
 	       89, 0 ) == -1){
@@ -329,12 +323,9 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     exit(0); 
   }
 
-
-
   /* 
      Forward the response to our bowser
   */
-
   if (send(new_socket, totbuf, totbytes, 0 ) == -1){
     perror("send"); 
   }
@@ -343,21 +334,24 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
 
 
 
-bool bad_words(string & data, int new_socket){
+bool bad_words(string & data){
   transform(begin(data), end(data), begin(data), ::tolower); 
+
+  string header{}; 
+  copy(begin(data), begin(data) + data.find("\r\n\r\n"), begin(header)); 
+  
 
   /*
     might need to remove blank spaces around here fam
-   */
-      // char asd;
-  if( data.find("content-encoding: gzip") ||
-      data.find("text") == string::npos)
-      {
-	cerr << "gzip: skipping filtering" << endl;
-	return false;
-      }
+  */
 
-    if(  data.find("spongebob") != string::npos ||
+  if( header.find("content-encoding: gzip") != string::npos ||
+      header.find("text/html") == string::npos)
+    {
+      return false;
+    }
+
+  if(  data.find("spongebob") != string::npos ||
        data.find("paris hilton") != string::npos ||
        data.find("britney spears") != string::npos ||
        data.find("norrk%c3%b6ping") != string::npos||
@@ -366,13 +360,9 @@ bool bad_words(string & data, int new_socket){
     
     {
   
-      cerr << "###\n\n\n\nFILTER RETURNNING TRUE\n\n\n\n###" << data << endl;
-      // cin >> asd;
       return true; 
       
     }
-  cerr << data << endl;
-  // cin >> asd;
   return false; 
 }
 
