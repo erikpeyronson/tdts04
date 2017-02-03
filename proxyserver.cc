@@ -28,7 +28,7 @@ using namespace std;
 
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes);
 void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket);
-bool bad_get(string & get_request, int new_socket); //takes a get_request and a socket. for bad GETs, redirects a 302 to that socket. 
+bool bad_words(string & data, int new_socket); //takes a data and a socket. for bad GETs, redirects a 302 to that socket. 
 
 
 // Function for handling child processes
@@ -200,10 +200,16 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   /*
     Filter the get request
   */
-  string get_request{buf_server}; 
-  if(bad_get(get_request, new_socket)){
-    exit(0); 
-  }
+  // string get_request{buf_server}; 
+  // if(bad_words(get_request, new_socket)){
+   
+  //  if (send(new_socket, 
+  // 	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html\r\n\r\n",
+  // 	       89, 0 ) == -1){
+  // 	perror("302"); 
+  //  }
+  //  exit(1);
+  // }
   
   
 
@@ -308,12 +314,18 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   /*
     Filter the response
    */
-  string message(totbuf, totbytes); 
+  string message{totbuf}; // (totbuf, totbytes); 
   //  copy(begin(totbuf), begin(totbuf) + totbytes, begin(message));
 
   cerr << "####\n#message\n####\n" << message << "####"<< endl; 
-
-  if(bad_get(message, new_socket)){
+  // exit(1);
+  if(bad_words(message, new_socket)){    
+   if (send(new_socket, 
+	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html\r\n\r\n",
+	       89, 0 ) == -1){
+	perror("302");
+      }
+   cerr << "GAYY";
     exit(0); 
   }
 
@@ -331,27 +343,36 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
 
 
 
-bool bad_get(string & get_request, int new_socket){
-  transform(begin(get_request), end(get_request), begin(get_request), ::tolower); 
+bool bad_words(string & data, int new_socket){
+  transform(begin(data), end(data), begin(data), ::tolower); 
 
   /*
     might need to remove blank spaces around here fam
    */
-  
-  if(  get_request.find("spongebob") != string::npos ||
-       get_request.find("paris hilton") != string::npos ||
-       get_request.find("britney spears") != string::npos ||
-       get_request.find("norrköping") != string::npos)
-    {
-
-      if (send(new_socket, 
-	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html\r\n\r\n",
-	       89, 0 ) == -1){
-	perror("302"); 
+      // char asd;
+  if( data.find("content-encoding: gzip") ||
+      data.find("text") == string::npos)
+      {
+	cerr << "gzip: skipping filtering" << endl;
+	return false;
       }
+
+    if(  data.find("spongebob") != string::npos ||
+       data.find("paris hilton") != string::npos ||
+       data.find("britney spears") != string::npos ||
+       data.find("norrk%c3%b6ping") != string::npos||
+       data.find("norrköping") != string::npos||
+       data.find("norrkoping") != string::npos)
+    
+    {
+  
+      cerr << "###\n\n\n\nFILTER RETURNNING TRUE\n\n\n\n###" << data << endl;
+      // cin >> asd;
       return true; 
       
     }
+  cerr << data << endl;
+  // cin >> asd;
   return false; 
 }
 
