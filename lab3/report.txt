@@ -1,0 +1,145 @@
+Task A: 
+
+TCP connnection is between a port on the client and a port on the
+server. It begins by a three way handshake and then the sender sends
+it's segment at an increasing rate, adjusting it for the responses
+from the reciever.
+
+The measured RTT is used to estimate the timeout for packet loss so
+when you take way more time to get a response you might suspect that
+you have a packet loss and have to retransmit the segment. This also
+helps avoid falsly detecting packet loss.
+
+
+
+
+
+Task B: 
+
+13. Use the Time-Sequence-Graph (Stevens) plotting tool to view the
+    sequence number versus time plot of segments being sent from the
+    client to the server (Figure 2a and Figure 2b). For each of the
+    two traces, can you identify where TCP's slow start phase begins
+    and ends, and where congestion avoidance takes over? If you can,
+    explain how. If not, explain why not. To better identify these
+    phases, you may need to find the number of unacknowledged packets
+    (or bytes) at different times and plot the unacknowledged packets
+    (y-axis) as a function of time (x-axis). Note that the number of
+    unacknowledged packets at different times can be found by
+    comparing the number of packets that have been sent with the
+    number of packets that have been acknowledged. After plotting the
+    number of unacknowledged packets versus time, comment on ways in
+    which the measured data differs from the idealized behavior of TCP
+    that we've studied in the text.
+
+Slow start is the curved part in the beginning. Congestion avoidance
+takes over at packet 5 since we no longer have an exponential curve. 
+
+
+
+
+14. Explain the relationship between (i) the congestion window, (ii)
+    the receiver advertised window, (iii) the number of unacknowledged
+    bytes, and (iv) the effective window at the sender.
+
+The congestion window is the sender's estimate of how large packets
+you can send at a time. It uses slow start until it hits a certain
+threshold at which it's increments are linear instead.
+
+The reciever's advertised window is the max value of the congestion
+window.
+
+The number of unacknowledged bytes is the bytes with which we fill the
+cogestion window. The sender will have to keep track of the amount of
+unacked bytes, so that we do not send bytes outside the window. This
+is easily achieved by remembering the number of the last ack recieved
+fromt he reciever.
+
+
+
+15. Is it generally possible to find the congestion window size
+    (i.e. cwnd) and how it changes with time, from the captured trace
+    files? If so, please explain how. If not, please explain when and
+    when not. Motivate your answer and give examples. Your answer may
+    also benefit from trying to describe and discuss your answer in
+    the context of the two prior questions, for example.
+
+To find the congestion window size, you'd look at the amount of
+packets that the sender sends in the graph. The cwnd will grow over
+time assuming that the cap of advertised window, or the actual network
+limit isn't reached.
+
+
+
+
+Task C: 
+
+16. What is the throughput of each of the connections in bps (bits per
+    second)? What is the total bandwidth of the host on which the
+    clients are running? Discuss the TCP fairness for this case.
+
+Throughput is totatl transfered bytes / duration (*8 for Bytes to bits)
+
+	   Connection: 	Throughput(Mbps)
+	    1: 		2.535 
+	    2:		2.546 
+	    3:		2.575
+	    4:		2.550
+
+	    Total bandwidth is the sum 11.9 Mpbs
+
+Yes they seem fair. They are identical test cases practically and they
+appear to produce the same result, roughly.
+
+17. What is the throughput of each of the connections in bps (bits per
+    second)? What is the total bandwidth of the host on which the
+    clients are running? Discuss the TCP fairness for this case.
+
+	   Connection: 	Throughput(Mbps)
+	    1: 		23.23
+	    2:		15.64
+	    3:		13.50
+	    4:		12.47
+	    5:		9.654
+	    6:		6.279
+	    7:		5.844
+	    8:		3.841
+	    9:		3.486
+
+In this case, the download takes the same total time at all
+times. Longer RTTs produce less throughput so its good.
+
+
+	   Connection: 	Throughput(Mbps)
+	    1: 		15.01
+	    2:		12.47
+	    3:		8.750
+	    4:		8.828
+	    5:		7.442
+	    6:		7.019
+	    7:		6.795
+	    8:		5.584
+	    9:		5.388
+	    10:		5.273
+
+
+
+18. Discuss the TCP fairness for this case. For all of these questions
+    you must take a closer look at the relationships between the
+    characteristics of the different connections and discuss your
+    findings in the context of the different experiments. You are
+    expected to show that you understand the concept of TCP fairness
+    and how the different scenarios may impact the throughput
+    relationships that you observe and those that you may expect in
+    general. To help the discussion you may for example want to create
+    a scatter plot that show the estimated round trip time (RTT) and
+    throughput against each other (for the different connections). You
+    also want to carefully examine and discuss the above throughput
+    equation and how it may apply to each scenario.
+
+This is somewhat unfair since the higher RTT don't always produce
+lower throughput. However it should be taken into consideration that
+we're using bittorrent which quite arbitrarily prioritizes different
+hosts.
+
+

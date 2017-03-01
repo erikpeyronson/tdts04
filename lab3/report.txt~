@@ -1,0 +1,33 @@
+Practice questions (not to be explicitly answered): 
+
+1. What are the first and last packets for the POST request?
+
+The first POST packet is no 4 right after the three way handshake
+
+
+
+2. What is the IP address and the TCP port used by the client computer
+   (source) that is transferring the file to gaia.cs.umass.edu?
+
+source ip 192.168.1.102 can be found in the first field of the message
+
+source port: 1161
+
+3. What is the IP address of gaia.cs.umass.edu? On what port number is it
+   sending and receiving TCP segments for this connection?
+
+dest ip 128.119.245.12
+
+
+
+What is the sequence number of the TCP SYN segment that is used to initiate the TCP connection between the client computer and gaia.cs.umass.edu? What is it in the segment that identifies the segment as a SYN segment?
+What is the sequence number of the SYNACK segment sent by gaia.cs.umass.edu to the client computer in reply to the SYN? What is the value of the ACKnowledgement field in the SYNACK segment? How did gaia.cs.umass.edu determine that value? What is it in the segment that identifies the segment as a SYNACK segment?
+What is the sequence number of the TCP segment containing the HTTP POST command?
+Consider the TCP segment containing the HTTP POST as the first segment in the TCP connection. What are the sequence numbers of the first six segments in the TCP connection (including the segment containing the HTTP POST)? At what time was each segment sent? When was the ACK for each segment received? Given the difference between when each TCP segment was sent, and when its acknowledgement was received, what is the RTT value for each of the six segments? What is the EstimatedRTT value (see page 277 in text) after the receipt of each ACK? Assume that the value of the EstimatedRTT is equal to the measured RTT for the first segment, and then is computed using the EstimatedRTT equation on page 277 for all subsequent segments.
+Note: Wireshark has a nice feature that allows you to plot the RTT for each of the TCP segments sent. Select a TCP segment in the Packet List Pane that is being sent from the client to the gaia.cs.umass.edu server. Then select: Statistics->TCP Stream Graph->Round Trip Time Graph.
+What is the length of each of the first six TCP segments?
+What is the minimum amount of available buffer space advertised at the receiver for the entire trace? Does the lack of receiver buffer space ever throttle the sender?
+Are there any retransmitted segments in the trace file? What did you check for (in the trace) in order to answer this question?
+How much data does the receiver typically acknowledge in an ACK? Can you identify cases where the receiver is ACKing every other received segment (see Table 3.2 on page 285 in the text).
+What is the throughput (bytes transferred per unit time) for the TCP connection? Explain how you calculated this value.
+
