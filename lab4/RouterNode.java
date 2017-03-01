@@ -1,4 +1,6 @@
-import javax.swing.*;        
+import javax.swing.*; 
+
+       
 
 public class RouterNode {
   private int myID;
@@ -13,6 +15,13 @@ public class RouterNode {
     private int[][] distances = new int[RouterSimulator.NUM_NODES][RouterSimulator.NUM_NODES]; 
     private boolean[] is_neighbour = new boolean[RouterSimulator.NUM_NODES];
 
+    //
+    private int[] linkCosts = new int[RouterSimulator.NUM_NODES];
+    private int[] firstHop = new int[RouterSimulator.NUM_NODES];
+
+
+    // change this to false to reverse poisonreverse
+    public static final boolean poisonreverse = true; 
   //--------------------------------------------------
   public RouterNode(int ID, RouterSimulator sim, int[] costs) {
     myID = ID;
@@ -46,15 +55,17 @@ public class RouterNode {
       //                        (must be an immediate neighbor) */
       // int[] mincost = new int[RouterSimulator.NUM_NODES];    /* min cost to node 0 ... 3 */
       
-      //for loop som går igenom (mincost[i] + kostnaden till källan) < våran kostnad till någoon av noderna
-
-      /*
-	distances[pkt.source] = pkt.mincost
-       */
+      //keep track of if we need to update
       boolean is_changed = false;
 
-      // Neighboor array is updated with the id of the sending neighboor
 
+      //update or link cost array
+      if(linkCosts[pkt.sourceid] != pkt.mincost[pkt.sourceid]){
+	  is_changed = true; 
+	  linkCosts[pkt.sourceid] = pkt.mincost[pkt.sourceid]; 
+      }
+
+      // Neighboor array is updated with the id of the sending neighboor
       if ( !is_neighbour[pkt.sourceid] ){
       	  is_changed = true; 
       	  is_neighbour[pkt.sourceid] = true;    
@@ -79,11 +90,33 @@ public class RouterNode {
 	  }
       }
 
+      //update the firsthop 
+      int tmp; 
+      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	  tmp = linkCosts[i] + distances[i][pkt.destid];
+	  if(tmp < firstHop[i] && i != myID){
+	      firstHop[i] = linkCosts[i] + distances[i][pkt.destid];
+	  }
+      }
+
 
       //if anything changed, tell our neighbours what is up
       //will the last constructed node get an incorrect array of neighbours? 
       if(is_changed) {
-	  RouterPacket outgoing_pkt = new RouterPacket(myID, pkt.sourceid, costs);
+	  //tell lies about cost
+	  int falsecosts[] = new int[RouterSimulator.NUM_NODES];
+	  System.arraycopy(costs, 0, falsecosts, 0, RouterSimulator.NUM_NODES); 
+	  
+	  if(poisonreverse){
+	      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
+		  //don't route back to anyone that isn't me 
+		  if( falsecosts[i] != pkt.destid && falsecosts[i] != pkt.sourceid ){
+		      falsecosts[i] = RouterSimulator.INFINITY; 
+		  }
+	      }
+	  }
+
+	  RouterPacket outgoing_pkt = new RouterPacket(myID, pkt.sourceid, falsecosts);
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
 	      outgoing_pkt.destid = i;
 	      if( is_neighbour[i] ) {
@@ -91,7 +124,7 @@ public class RouterNode {
 	      }
 	  }
       }
-      // Send updated distance vectors.
+
       
       
 
@@ -129,12 +162,20 @@ public class RouterNode {
   public void printDistanceTable() {
 	  myGUI.println("---\nCurrent table for " + myID +
 			"  at time " + sim.getClocktime());
-	  myGUI.println("\nOur distance vector and routes\nNode\tCost "); 
+	  myGUI.println("\nDistance table (Y is Destinations, X is sources)\n\t"); //or are they
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print("\t"+i); 
+	  }
+	  myGUI.print("\n--|------------------------------------------------------------------------------------------------------------------\n"); 
+	  
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print(i +"|\t"); 
+	      for(int j = 0; j < RouterSimulator.NUM_NODES; ++j){
 
-	      myGUI.print(Integer.toString(i)); 
+	      myGUI.print(Integer.toString(distances[i][j])); 
 	      myGUI.print("\t"); 
-	      myGUI.println(Integer.toString(costs[i])); 
+	      }
+	      myGUI.println(""); 
 	  }
   }
 
