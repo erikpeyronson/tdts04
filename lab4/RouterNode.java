@@ -21,7 +21,7 @@ public class RouterNode {
 
 
     // change this to false to reverse poisonreverse
-    public static final boolean poisonreverse = true; 
+    public static final boolean poisonreverse = !true; 
   //--------------------------------------------------
   public RouterNode(int ID, RouterSimulator sim, int[] costs) {
     myID = ID;
@@ -60,10 +60,11 @@ public class RouterNode {
 
 
       //update or link cost array
-      if(linkCosts[pkt.sourceid] != pkt.mincost[pkt.sourceid]){
+      if(linkCosts[pkt.sourceid] != pkt.mincost[pkt.destid]){
 	  is_changed = true; 
-	  linkCosts[pkt.sourceid] = pkt.mincost[pkt.sourceid]; 
+	  linkCosts[pkt.sourceid] = pkt.mincost[pkt.destid]; 
       }
+
 
       // Neighboor array is updated with the id of the sending neighboor
       if ( !is_neighbour[pkt.sourceid] ){
@@ -81,11 +82,13 @@ public class RouterNode {
 	  distances[pkt.sourceid][i] = pkt.mincost[i];
       }
 
-      // Loop through mincost to se what costs need to be updated call
+      // Loop through mincost to see what costs need to be updated call
       // updateLinkCost for each that needs to be changed.
+      // 
       for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	  if( (pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) {
-	      costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
+	      //costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
+	      updateLinkCost(i, pkt.mincost[i] + costs[pkt.sourceid]); 
 	      is_changed = true;
 	  }
       }
@@ -94,7 +97,7 @@ public class RouterNode {
       int tmp; 
       for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	  tmp = linkCosts[i] + distances[i][pkt.destid];
-	  if(tmp < firstHop[i] && i != myID){
+	  if(tmp < firstHop[i] && i != myID && is_neighbour[i]){
 	      firstHop[i] = linkCosts[i] + distances[i][pkt.destid];
 	  }
       }
@@ -110,7 +113,7 @@ public class RouterNode {
 	  if(poisonreverse){
 	      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
 		  //don't route back to anyone that isn't me 
-		  if( falsecosts[i] != pkt.destid && falsecosts[i] != pkt.sourceid ){
+		  if( i != pkt.destid && i != pkt.sourceid ){
 		      falsecosts[i] = RouterSimulator.INFINITY; 
 		  }
 	      }
@@ -160,13 +163,14 @@ public class RouterNode {
 
   //--------------------------------------------------
   public void printDistanceTable() {
-	  myGUI.println("---\nCurrent table for " + myID +
+	  myGUI.println("\n\nCurrent table for " + myID +
 			"  at time " + sim.getClocktime());
 	  myGUI.println("\nDistance table (Y is Destinations, X is sources)\n\t"); //or are they
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print("\t"+i); 
 	  }
-	  myGUI.print("\n--|------------------------------------------------------------------------------------------------------------------\n"); 
+	  myGUI.print("\n--|-------------------------------------------------------");
+	  myGUI.print("-----------------------------------------------------------\n"); 
 	  
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print(i +"|\t"); 
@@ -177,6 +181,46 @@ public class RouterNode {
 	      }
 	      myGUI.println(""); 
 	  }
+
+
+
+
+	  myGUI.println("\nDistance vector\n\t\t"); //or are they
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print("\t"+i); 
+	  }
+	  myGUI.print("\n--|-------------------------------------------------------");
+	  myGUI.print("-----------------------------------------------------------\n\t"); 
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print(Integer.toString(costs[i]));
+	      myGUI.print("\t"); 
+	  }
+	  myGUI.println(""); 
+
+	  myGUI.println("\nFirst Hop\n\t\t"); //or are they
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print("\t"+i); 
+	  }
+	  myGUI.print("\n--|-------------------------------------------------------");
+	  myGUI.print("-----------------------------------------------------------\n\t"); 
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print(Integer.toString(firstHop[i]));
+	      myGUI.print("\t"); 
+	  }
+
+	  myGUI.println("\nLink Cost\n\t\t"); //or are they
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print("\t"+i); 
+	  }
+	  myGUI.print("\n--|-------------------------------------------------------");
+	  myGUI.print("-----------------------------------------------------------\n\t"); 
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+	      myGUI.print(Integer.toString(linkCosts[i]));
+	      myGUI.print("\t"); 
+	  }
+ 
+
+	  myGUI.println(""); 
   }
 
   //--------------------------------------------------
@@ -185,7 +229,21 @@ public class RouterNode {
       // Vi är i nod 1
       // in kommer dest 2 , new cost 5
       // cost = 5 + tiden mellan 1 och 2
-      costs[dest] = newcost; 
+      myGUI.println("\n HEJ \n NU \n KÖRS \n UPDATE-LINKKOST\n");
+      if(costs[dest] != newcost){
+	  costs[dest] = newcost;
+	  RouterPacket outgoing_pkt = new RouterPacket(myID, 0, costs);
+	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
+	      outgoing_pkt.destid = i;
+	      if( is_neighbour[i] ) {
+		  sendUpdate(outgoing_pkt);
+	      }
+	  }
+
+      }
+
+      
+      //tell you're are're friendZ :OK_HANDSIGN:
       printDistanceTable();
   }
 
