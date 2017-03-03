@@ -29,6 +29,20 @@ using namespace std;
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes);
 void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket);
 bool bad_words(string & data); //takes a data and a socket. for bad GETs, redirects a 302 to that socket. 
+int sendall(int s, const char *buf, int *len)
+{
+ int total = 0; // how many bytes we've sent
+ int bytesleft = *len; // how many we have left to send
+ int n;
+ while(total < *len) {
+ n = send(s, buf+total, bytesleft, 0);
+ if (n == -1) { break; }
+ total += n;
+ bytesleft -= n;
+ }
+ *len = total; // return number actually sent here
+ return n==-1?-1:0; // return -1 on failure, 0 on success
+} 
 
 
 // Function for handling child processes
@@ -291,6 +305,7 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   */
   int totbytes{}; 
   char totbuf[LOCALDATASIZE];
+  string totbuf_s{};
 
   
   while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0)
@@ -303,32 +318,77 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
 	cerr << "Too big recieve, dude" << endl;
 	break;
       }
-      copy(begin(buf_server),end(buf_server),begin(totbuf)+totbytes);    
+      copy(begin(buf_server),end(buf_server),begin(totbuf_s)+totbytes+1);    
       totbytes+=numbytes;
+   
+      totbuf_s += string(buf_server, numbytes); 
+      memset(&buf_server, 0, sizeof buf_server);
+      cerr << "+= totbuf_s" << endl;
     }
 
+
+  cerr << "###\n" << totbuf_s << "###" <<endl; 
   totbuf[totbytes] = '\0'; 
 
   /*
     Filter the response
    */
-  string message{totbuf}; // (totbuf, totbytes); 
-  if(bad_words(message)){    
+  string message{totbuf_s}; // (totbuf, totbytes); 
+  //  if(bad_words(message)){    
+  if(bad_words(totbuf_s)){    
    if (send(new_socket, 
 	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html\r\n\r\n",
 	       89, 0 ) == -1){
 	perror("302");
       }
-   cerr << "GAYY";
+
     exit(0); 
   }
 
   /* 
      Forward the response to our bowser
   */
-  if (send(new_socket, totbuf, totbytes, 0 ) == -1){
-    perror("send"); 
-  }
+  // if (send(new_socket, totbuf, totbytes, 0 ) == -1){
+  //   perror("send"); 
+  // }
+
+  int i{}; 
+  char sendbuf[MAXDATASIZE];
+  auto begin_it = begin(totbuf);
+  auto end_it = begin_it+i+MAXDATASIZE;
+  int sendsize{MAXDATASIZE}; 
+
+  // while(i < totbytes){
+
+  //   if(i + MAXDATASIZE > totbytes){
+  //     end_it = begin_it + i + numbytes; 
+  //     sendsize = numbytes-1; 
+      
+  //   }
+  
+  //   memset(&sendbuf, 0, sizeof sendbuf);
+  //   copy(begin_it +i,end_it, sendbuf); 
+  //   sendbuf[sendsize+1] = '\0';
+  //   i += MAXDATASIZE; 
+
+  //   if (send(new_socket, sendbuf, sendsize, 0 ) == -1){
+  //     perror("send"); 
+  //   }
+
+  // }
+
+  // if (send(new_socket, totbuf_s.c_str(), totbytes, 0 ) == -1){
+  //   perror("send"); 
+  // }
+
+  if (sendall(new_socket, totbuf_s.c_str(), &totbytes) == -1) {
+    perror("sendall");
+    printf("We only sent %d bytes because of the error!\n", totbytes);
+  } 
+
+  // if (send(new_socket, totbuf, totbytes, 0 ) == -1){
+  //   perror("send"); 
+  // }
 
 }
 
@@ -345,11 +405,11 @@ bool bad_words(string & data){
     might need to remove blank spaces around here fam
   */
 
-  if( header.find("content-encoding: gzip") != string::npos ||
-      header.find("text/html") == string::npos)
-    {
-      return false;
-    }
+  // if( header.find("content-encoding: gzip") != string::npos ||
+  //     header.find("text/html") == string::npos)
+  //   {
+  //     return false;
+  //   }
 
   if(  data.find("spongebob") != string::npos ||
        data.find("paris hilton") != string::npos ||

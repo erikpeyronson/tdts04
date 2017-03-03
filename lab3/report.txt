@@ -64,12 +64,8 @@ fromt he reciever.
     also benefit from trying to describe and discuss your answer in
     the context of the two prior questions, for example.
 
-To find the congestion window size, you'd look at the amount of
-packets that the sender sends in the graph. The cwnd will grow over
-time assuming that the cap of advertised window, or the actual network
-limit isn't reached.
-
-
+In general it is not possible to find the congestion window size
+unless receiving packet loss such as during network overload.
 
 
 Task C: 
