@@ -22,30 +22,44 @@ public class RouterNode {
 
     // change this to false to reverse poisonreverse
     public static final boolean poisonreverse = !true; 
-  //--------------------------------------------------
-  public RouterNode(int ID, RouterSimulator sim, int[] costs) {
-    myID = ID;
-    this.sim = sim;
-    myGUI =new GuiTextArea("  Output window for Router #"+ ID + "  ");
+    //--------------------------------------------------
+    public RouterNode(int ID, RouterSimulator sim, int[] costs) {
 
-    System.arraycopy(costs, 0, this.costs, 0, RouterSimulator.NUM_NODES);
 
-    printDistanceTable();
 
-    // initiate is_neighbor to false
-    for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){   
-	is_neighbour[i] = false;
+
+
+	myID = ID;
+	this.sim = sim;
+	myGUI =new GuiTextArea("  Output window for Router #"+ ID + "  ");
+
+
+	System.arraycopy(costs, 0, linkCosts, 0, RouterSimulator.NUM_NODES);
+
+
+
+	System.arraycopy(costs, 0, this.costs, 0, RouterSimulator.NUM_NODES);
+
+	printDistanceTable();
+
+	// initiate is_neighbor to false
+	for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){   
+	    is_neighbour[i] = false;
+	}
+
+	/*
+	  Send a packet to all other nodes. This schelps figure out what nodes are neighboring. 
+	*/
+	RouterPacket init = new RouterPacket(myID, 0, costs);
+	for (int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
+	    init.destid = i;
+	    sendUpdate(init);
+	}
+
+
+ 
+
     }
-
-    /*
-      Send a packet to all other nodes. This schelps figure out what nodes are neighboring. 
-     */
-    RouterPacket init = new RouterPacket(myID, 0, costs);
-    for (int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
-	init.destid = i;
-	sendUpdate(init);
-    }
-  }
 
   //--------------------------------------------------
   public void recvUpdate(RouterPacket pkt) {
@@ -57,13 +71,9 @@ public class RouterNode {
       
       //keep track of if we need to update
       boolean is_changed = false;
+      myGUI.println("from: " + Integer.toString(pkt.sourceid) + " to: "+ Integer.toString(pkt.destid)); 
 
 
-      //update or link cost array
-      if(linkCosts[pkt.sourceid] != pkt.mincost[pkt.destid]){
-	  is_changed = true; 
-	  linkCosts[pkt.sourceid] = pkt.mincost[pkt.destid]; 
-      }
 
 
       // Neighboor array is updated with the id of the sending neighboor
@@ -77,26 +87,61 @@ public class RouterNode {
       	  }
       }
 
+
+
       // distances matrix is updated with the new distance vector
       for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){   
-	  distances[pkt.sourceid][i] = pkt.mincost[i];
+	  if(distances[pkt.sourceid][i] != pkt.mincost[i]
+	     	     && pkt.mincost[i] != 0
+){
+	      is_changed = true; 
+	      myGUI.println("asd"); 
+	      distances[pkt.sourceid][i] = pkt.mincost[i];
+	  }
       }
 
-      // Loop through mincost to see what costs need to be updated call
-      // updateLinkCost for each that needs to be changed.
-      // 
-      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
-	  if( (pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) {
-	      //costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
-	      updateLinkCost(i, pkt.mincost[i] + costs[pkt.sourceid]); 
-	      is_changed = true;
-	  }
+      // // Loop through mincost to se what costs need to be updated call
+      // // updateLinkCost for each that needs to be changed.
+      // for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
+      // 	  if( (pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) {
+      // 	      costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
+      // 	      is_changed = true;
+      // 	  }
+      // }
+
+      // update our distance vector
+      for(int src = 0; src < RouterSimulator.NUM_NODES; ++src){
+      	  // if the packet we are sent + our least cost to the sender,
+      	  // is cheaper than our cost to a node, our least cost to
+      	  // that node must be updated
+
+      	  // but what if our least cost isn't true tho??
+      	  // if( (pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) {
+      	  //     costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
+      	  //     is_changed = true;
+      	  // }
+      	  for(int des = 0; des < RouterSimulator.NUM_NODES; ++des){   
+      	      // if( distances[pkt.sourceid][i] + costs[pkt.sourceid] < costs[i] ){
+      	      // 	  //	      if( (pkt.mincost[i] + distances[pkt.sourceid][i]) < costs[i] ) {
+      	      // 	  costs[i] = costs[sourceid] + distances[pkt.sourceid][i];
+      	      // 	  is_changed = true;
+      	      // }
+
+      	      if(distances[src][des] + linkCosts[src] < costs[des] &&
+		 distances[src][des] != 0 &&
+		 des != myID){
+		  myGUI.println("Costs updated");
+      		  costs[des] = distances[src][des] + linkCosts[src]; 
+      		  is_changed = true; 
+      	      }
+      	  }
       }
 
       //update the firsthop 
       int tmp; 
       for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	  tmp = linkCosts[i] + distances[i][pkt.destid];
+	  
 	  if(tmp < firstHop[i] && i != myID && is_neighbour[i]){
 	      firstHop[i] = linkCosts[i] + distances[i][pkt.destid];
 	  }
@@ -106,6 +151,8 @@ public class RouterNode {
       //if anything changed, tell our neighbours what is up
       //will the last constructed node get an incorrect array of neighbours? 
       if(is_changed) {
+	  
+	  myGUI.println("bricksquad"); 
 	  //tell lies about cost
 	  int falsecosts[] = new int[RouterSimulator.NUM_NODES];
 	  System.arraycopy(costs, 0, falsecosts, 0, RouterSimulator.NUM_NODES); 
@@ -229,9 +276,27 @@ public class RouterNode {
       // Vi är i nod 1
       // in kommer dest 2 , new cost 5
       // cost = 5 + tiden mellan 1 och 2
-      myGUI.println("\n HEJ \n NU \n KÖRS \n UPDATE-LINKKOST\n");
-      if(costs[dest] != newcost){
-	  costs[dest] = newcost;
+
+      //använd en tabell originalkostnader och lita inte på inskickade distancevektorer för korstatste vägen
+      int oldcost = linkCosts[dest]; 
+      if(linkCosts[dest] != newcost){
+	  linkCosts[dest] = newcost; 
+
+
+	  // since our link costs changed, recalculate distance table
+	  // // if our distance table changed, sound the alarm
+
+	  
+	  // //	  for(int i = 0; i nod< RouterSimulator.NUM_NODES; ++i) {      
+	  for(int des = 0; des < RouterSimulator.NUM_NODES; ++des) {      
+	      if( (distances[myID][des] != linkCosts[des]) )
+	  	  {
+	  	      distances[myID][des] = linkCosts[des];
+		      costs[des] = linkCosts[des]; 
+	  	  }
+	  }
+	  
+
 	  RouterPacket outgoing_pkt = new RouterPacket(myID, 0, costs);
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
 	      outgoing_pkt.destid = i;
@@ -241,11 +306,20 @@ public class RouterNode {
 	  }
 
       }
-
       
       //tell you're are're friendZ :OK_HANDSIGN:
       printDistanceTable();
   }
+
+    //
+    public void broadcast(int distancevector[]){
+	RouterPacket outgoing_pkt = new RouterPacket(myID, 0, costs);
+	for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
+	    outgoing_pkt.destid = i;
+	    sendUpdate(outgoing_pkt);
+	}
+
+    }
 
 }
 
