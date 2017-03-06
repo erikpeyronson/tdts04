@@ -2,6 +2,7 @@
 #include <iterator>
 #include <sstream>
 #include <algorithm>
+#include <utility>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +18,7 @@
 #include <signal.h>
 
 #define BACKLOG 10
-#define MAXDATASIZE 15000//might need to increase
+#define MAXDATASIZE 2000//might need to increase
 #define LOCALDATASIZE 8000000
 
 
@@ -25,34 +26,26 @@
 
 using namespace std;
 
+struct part{
+  char * c;
+  size_t l; //this is not the same as stlen(c) since there might be \0 dudes in the recieved bytes
+};
 
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes);
 void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket);
 bool bad_words(string & data); //takes a data and a socket. for bad GETs, redirects a 302 to that socket. 
-int sendall(int s, const char *buf, int *len)
-{
- int total = 0; // how many bytes we've sent
- int bytesleft = *len; // how many we have left to send
- int n;
- while(total < *len) {
- n = send(s, buf+total, bytesleft, 0);
- if (n == -1) { break; }
- total += n;
- bytesleft -= n;
- }
- *len = total; // return number actually sent here
- return n==-1?-1:0; // return -1 on failure, 0 on success
-} 
+void printbuf(const char *buf, size_t l); //prints a c string to cerr, but literally writes out \r\n and such 
+void printvector(vector<part> v); //loops through a vector of parts, print the buffers and their lenghts
+int sendall(int s, const char *buf, size_t *len);
+bool istextcheck(char *buf, int numbytes);
+
 
 
 // Function for handling child processes
 void sigchld_handler(int s)
 {
-  // waitpid() might overwrite errno, so we save and restore it:
   int saved_errno = errno;
-
   while(waitpid(-1, NULL, WNOHANG) > 0);
-
   errno = saved_errno;
 }
 
@@ -62,7 +55,6 @@ void *get_in_addr(struct sockaddr *sa)
   if (sa->sa_family == AF_INET) {
     return &(((struct sockaddr_in*)sa)->sin_addr);
   }
-
   return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
@@ -82,6 +74,7 @@ int main(int argc, char* argv[])
 
   if(argc < 2){
     cerr << "Usage: ./proxyserver PORT (Example: ./proxyserver 8080)\n";
+    return 1; 
   }
   string portstring = argv[1];
   char port[87];
@@ -124,7 +117,7 @@ int main(int argc, char* argv[])
     inet_ntop(their_addr.ss_family, 
 	      get_in_addr((struct sockaddr *)&their_addr),
 	      s, sizeof s); 
-    printf("server: got connection from %s\n", s); 
+    //    printf("\n\nserver: got connection from %s\n\n\n", s); 
 
 
 
@@ -148,8 +141,6 @@ int main(int argc, char* argv[])
 // function listen_and_bind
 // listens for connections on port, opens binds to socket
 //
-
-
 void listen_and_bind(struct addrinfo * servinfo, int & listen_socket, int & yes)
 {
   struct addrinfo *p;
@@ -216,18 +207,19 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   }
   buf_server[numbytes] = '\0';
 
+
+
   /*
     Filter the get request
   */
   string get_request{buf_server}; 
-  if(bad_words(get_request)){
-   
-   if (send(new_socket, 
-  	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html\r\n\r\n",
-  	       89, 0 ) == -1){
-  	perror("302"); 
-   }
-   exit(1);
+  if(bad_words(get_request)){   
+    if (send(new_socket,
+	     "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html\r\n\r\n",
+	     89, 0 ) == -1){
+      perror("302"); 
+    }
+    exit(1);
   }
   
   
@@ -243,24 +235,24 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   iss2.ignore(6, ' ');
   iss2 >> get_host;
 
-
-
-  
-
  
 
   /*
     Change connection: keep-alive to Connection: close
+    Tested to correctly keep carriage return ending
   */
   string buf_server_string{buf_server};
-  auto pos = buf_server_string.find("Connection:"); // will give position of first char of keep_alive
-  
-  buf_server_string.replace(pos+12, 10, "close");
+  if(buf_server_string.find("GET") != string::npos){
+
+    auto pos = buf_server_string.find("Connection:"); // will give position of first char of keep_alive
+    buf_server_string.replace(pos+12, 10, "close");
+  }
 
   memset(&buf_server, 0, sizeof buf_server);
   copy(begin(buf_server_string),end(buf_server_string), begin(buf_server));
   buf_server[buf_server_string.size()] = '\0';
 
+  
 
   /*
     Make an addrinfo from the hostname
@@ -272,6 +264,8 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     exit(1);
   }
     
+
+
   /*
     connect the client to the internet server
   */
@@ -293,103 +287,82 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     exit(2);
   }
 
+
+
   /*
-    send the get request
+    Send the get request
   */  
   if (send(inet_sockfd, buf_server, numbytes, 0 ) == -1){
     perror("send"); 
   }
 
+
+
   /*
     Recieve response
   */
-  int totbytes{}; 
-  char totbuf[LOCALDATASIZE];
   string totbuf_s{};
 
-  
+  //final solution, a vector of c-strings and their recieved lengths
+  vector<part> v; 
+  bool istext = true; //the response is text
+
+  int counter{}; 
   while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0)
     { 
-      if( numbytes == -1)
-	{
-	  perror("recv");
-	}
-      if(numbytes + totbytes >= LOCALDATASIZE){
-	cerr << "Too big recieve, dude" << endl;
-	break;
+      if( numbytes == -1){perror("recv");}
+
+      
+      if(counter == 0) //check for nontext or gzip first loop
+	istext = istextcheck(buf_server, numbytes); 
+
+      if(!istext){ //don't need to store nontext
+       send(new_socket, buf_server, numbytes, 0 );
+       continue;
       }
-      copy(begin(buf_server),end(buf_server),begin(totbuf_s)+totbytes+1);    
-      totbytes+=numbytes;
-   
-      totbuf_s += string(buf_server, numbytes); 
-      memset(&buf_server, 0, sizeof buf_server);
-      cerr << "+= totbuf_s" << endl;
+
+      part p; 
+      char * tmp = new char[MAXDATASIZE]; 
+
+      memcpy(tmp, buf_server, numbytes);
+
+      p.c = tmp;
+      p.l = numbytes;     
+
+      printbuf(p.c, p.l); 
+      v.push_back(p); 
+
+
+      totbuf_s.append(buf_server, numbytes); 
+
+      ++counter; 
+
     }
 
 
-  cerr << "###\n" << totbuf_s << "###" <<endl; 
-  totbuf[totbytes] = '\0'; 
-
   /*
     Filter the response
-   */
-  string message{totbuf_s}; // (totbuf, totbytes); 
-  //  if(bad_words(message)){    
-  if(bad_words(totbuf_s)){    
-   if (send(new_socket, 
-	       "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html\r\n\r\n",
-	       89, 0 ) == -1){
-	perror("302");
-      }
+   */ 
 
-    exit(0); 
-  }
+  if(bad_words(totbuf_s)){
+    if (send(new_socket, 
+  	     "HTTP/1.1 302 Found\r\nLocation: http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html\r\n\r\n",
+  	     89, 0 ) == -1){perror("302");}exit(0);}
+
+
 
   /* 
      Forward the response to our bowser
   */
-  // if (send(new_socket, totbuf, totbytes, 0 ) == -1){
-  //   perror("send"); 
-  // }
+  if(istext){
+    for( auto i : v ) {
+      if (send(new_socket, i.c, i.l, 0 ) == -1){
+	perror("send"); 
+      }
+    }
 
-  int i{}; 
-  char sendbuf[MAXDATASIZE];
-  auto begin_it = begin(totbuf);
-  auto end_it = begin_it+i+MAXDATASIZE;
-  int sendsize{MAXDATASIZE}; 
 
-  // while(i < totbytes){
-
-  //   if(i + MAXDATASIZE > totbytes){
-  //     end_it = begin_it + i + numbytes; 
-  //     sendsize = numbytes-1; 
-      
-  //   }
-  
-  //   memset(&sendbuf, 0, sizeof sendbuf);
-  //   copy(begin_it +i,end_it, sendbuf); 
-  //   sendbuf[sendsize+1] = '\0';
-  //   i += MAXDATASIZE; 
-
-  //   if (send(new_socket, sendbuf, sendsize, 0 ) == -1){
-  //     perror("send"); 
-  //   }
-
-  // }
-
-  // if (send(new_socket, totbuf_s.c_str(), totbytes, 0 ) == -1){
-  //   perror("send"); 
-  // }
-
-  if (sendall(new_socket, totbuf_s.c_str(), &totbytes) == -1) {
-    perror("sendall");
-    printf("We only sent %d bytes because of the error!\n", totbytes);
-  } 
-
-  // if (send(new_socket, totbuf, totbytes, 0 ) == -1){
-  //   perror("send"); 
-  // }
-
+  }
 }
 
 
@@ -405,6 +378,7 @@ bool bad_words(string & data){
     might need to remove blank spaces around here fam
   */
 
+  // this isn't needed as we shortcut non string or gzip responses
   // if( header.find("content-encoding: gzip") != string::npos ||
   //     header.find("text/html") == string::npos)
   //   {
@@ -438,9 +412,73 @@ bool bad_words(string & data){
 
 
 
+void printbuf(const char *buf, size_t l){
+  for(int i = 0; i < l; ++i){
+    if (buf[i] == '\r')
+      cerr << "\\r";
+    else if (buf[i] == '\n')
+      cerr << "\\n" << endl; 
+    else if (buf[i] == '\0')
+      cerr << "\\0" << endl; 
+    else
+      cerr << buf[i]; 
+  }
+}
 
 
 
+
+
+void printvector(vector<part> v)
+{
+  cerr << "#############################################################\n" 
+       << "#LENGTH OF VECTOR PARTS                                     #\n";
+  for(auto i : v){
+    cerr << "#" << i.l << "\n"; 
+
+    cerr << "#############################################################\n";
+  }
+
+  for(auto i : v){
+    cerr << "#############################################################\n" 
+	 << i.l << " = i.l. "  
+	 << strlen(i.c) << " = strlen(i.c). " 
+	 << sizeof i.c << " = sizeof i.c. \n" 
+	 << "#############################################################\n";
+    printbuf(i.c, i.l);
+    cerr << "\n#############################################################\n";
+  }
+}
+
+
+
+int sendall(int s, const char *buf, size_t *len)
+{
+  int total = 0; // how many bytes we've sent
+  int bytesleft = *len; // how many we have left to send
+  int n;
+  while(total < *len) {
+    n = send(s, buf+total, bytesleft, 0);
+    if (n == -1) { break; }
+    total += n;
+    bytesleft -= n;
+  }
+  *len = total; // return number actually sent here
+  return n==-1?-1:0; // return -1 on failure, 0 on success
+} 
+
+
+
+bool istextcheck(char *buf, int numbytes){
+  string s{};
+  s.append(buf, numbytes); 
+  if( s.find("content-encoding: gzip") != string::npos ||
+     s.find("text/html") == string::npos) //if we search for text, and don't find, return true
+    {
+      return false;
+    }
+  return true; 
+}
 
 
 
