@@ -38,6 +38,31 @@ void printbuf(const char *buf, size_t l); //prints a c string to cerr, but liter
 void printvector(vector<part> v); //loops through a vector of parts, print the buffers and their lenghts
 int sendall(int s, const char *buf, size_t *len);
 bool istextcheck(char *buf, int numbytes);
+bool ischunkcheck(char *buf){
+  string s{buf}; 
+
+  if(s.find("Transfer-Encoding: chunked") != string::npos) {
+    return true; 
+  }
+  return false; 
+}
+int clcheck(char *buf){
+  string s{buf};
+  size_t index = s.find("Content-Length");
+  size_t end{}; 
+  if(index != string::npos) {
+    index += 15;
+    index_end //it doesn't even matter
+      = s.find("\r", index); 
+
+    
+
+    string cl_number; 
+  }
+  
+
+  return -1; 
+}
 
 
 
@@ -307,14 +332,20 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
   vector<part> v; 
   bool istext = true; //the response is text
 
+  bool chunk = false;
+  int contentlength; 
+
   int counter{}; 
   while( (numbytes = recv(inet_sockfd, buf_server, MAXDATASIZE-1, 0)) != 0)
     { 
       if( numbytes == -1){perror("recv");}
 
       
-      if(counter == 0) //check for nontext or gzip first loop
-	istext = istextcheck(buf_server, numbytes); 
+      if(counter == 0){ //check for nontext or gzip first loop
+	istext = istextcheck(buf_server, numbytes);
+	chunk = ischunkcheck(buf_server); 
+	contentlength = clcheck(buf_server); 
+      }
 
       if(!istext){ //don't need to store nontext
        send(new_socket, buf_server, numbytes, 0 );
