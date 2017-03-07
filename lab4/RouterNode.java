@@ -13,7 +13,7 @@ public class RouterNode {
 
      */
     private int[][] distances = new int[RouterSimulator.NUM_NODES][RouterSimulator.NUM_NODES]; 
-    private boolean[] is_neighbour = new boolean[RouterSimulator.NUM_NODES];
+    //private boolean[] is_neighbour = new boolean[RouterSimulator.NUM_NODES];
 
     //
     private int[] linkCosts = new int[RouterSimulator.NUM_NODES];
@@ -21,7 +21,7 @@ public class RouterNode {
 
 
     // change this to false to reverse poisonreverse
-    public static final boolean poisonreverse = !true; 
+    public static final boolean poisonreverse = !false; //!!!!!!!true; 
     //--------------------------------------------------
     public RouterNode(int ID, RouterSimulator sim, int[] costs) {
 
@@ -42,10 +42,21 @@ public class RouterNode {
 
 	printDistanceTable();
 
-	// initiate is_neighbor to false
+
+	// initiate firstHop to the direct route
+	// initiate every non-free path to INFINITY 2008
 	for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){   
-	    is_neighbour[i] = false;
+
+	    if(linkCosts[i] != RouterSimulator.INFINITY)
+		firstHop[i] = i; 
+	    else
+		firstHop[i] = RouterSimulator.INFINITY;
+	    	for(int j = 0; j < RouterSimulator.NUM_NODES; ++j){   
+		    if( i != j )
+			distances[i][j] = RouterSimulator.INFINITY;
+		}
 	}
+
 
 	/*
 	  Send a packet to all other nodes. This schelps figure out what nodes are neighboring. 
@@ -53,6 +64,7 @@ public class RouterNode {
 	RouterPacket init = new RouterPacket(myID, 0, costs);
 	for (int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
 	    init.destid = i;
+	    if( linkCosts[i] != RouterSimulator.INFINITY &&i != myID )
 	    sendUpdate(init);
 	}
 
@@ -64,138 +76,116 @@ public class RouterNode {
   //--------------------------------------------------
   public void recvUpdate(RouterPacket pkt) {
       System.out.println("recvUpdate"); 
-      // int sourceid;       /* id of sending router sending this pkt */
-      // int destid;         /* id of router to which pkt being sent 
-      //                        (must be an immediate neighbor) */
-      // int[] mincost = new int[RouterSimulator.NUM_NODES];    /* min cost to node 0 ... 3 */
       
       //keep track of if we need to update
       boolean is_changed = false;
       myGUI.println("from: " + Integer.toString(pkt.sourceid) + " to: "+ Integer.toString(pkt.destid)); 
 
 
-
-
-      // Neighboor array is updated with the id of the sending neighboor
-      if ( !is_neighbour[pkt.sourceid] ){
-      	  is_changed = true; 
-      	  is_neighbour[pkt.sourceid] = true;    
-      	  RouterPacket init = new RouterPacket(myID, 0, costs);
-      	  for (int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
-      	      init.destid = i;
-      	      sendUpdate(init);
-      	  }
-      }
-
-
-
-      // distances matrix is updated with the new distance vector
+      // update the entries in distance matrix that are not ours
       for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){   
-	  if(distances[pkt.sourceid][i] != pkt.mincost[i]
-	     	     && pkt.mincost[i] != 0
-){
-	      is_changed = true; 
-	      myGUI.println("asd"); 
-	      distances[pkt.sourceid][i] = pkt.mincost[i];
-	  }
+	  if(distances[pkt.sourceid][i] != pkt.mincost[i])
+	      {
+		  is_changed = true; 
+		  distances[pkt.sourceid][i] = pkt.mincost[i];	  
+	      }
       }
 
-      // // Loop through mincost to se what costs need to be updated call
-      // // updateLinkCost for each that needs to be changed.
-      // for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
-      // 	  if( (pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) {
-      // 	      costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
-      // 	      is_changed = true;
-      // 	  }
-      // }
+      if(is_changed){
+	  is_changed = false; 
+	  // recalculate and update our entry in distances
+	  for(int des = 0; des < RouterSimulator.NUM_NODES; ++des){   
 
-      // update our distance vector
-      for(int src = 0; src < RouterSimulator.NUM_NODES; ++src){
-      	  // if the packet we are sent + our least cost to the sender,
-      	  // is cheaper than our cost to a node, our least cost to
-      	  // that node must be updated
+	      // if the distance to destination isnt the same as the
+	      // distance to a given firsthop to that destination, then
+	      // change the distance to our destination given the firsthop
+	      if ( des != myID ){
+		  if (firstHop[des] != RouterSimulator.INFINITY
+		      && distances[myID][des] != distances[firstHop[des]][des] + distances[myID][firstHop[des]])
+		      {
+			  is_changed = true;
+			  distances[myID][des] = distances[firstHop[des]][des] + distances[myID][firstHop[des]];
+		      }
+	      
 
-      	  // but what if our least cost isn't true tho??
-      	  // if( (pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) {
-      	  //     costs[i] = pkt.mincost[i] + costs[pkt.sourceid];
-      	  //     is_changed = true;
-      	  // }
-      	  for(int des = 0; des < RouterSimulator.NUM_NODES; ++des){   
-      	      // if( distances[pkt.sourceid][i] + costs[pkt.sourceid] < costs[i] ){
-      	      // 	  //	      if( (pkt.mincost[i] + distances[pkt.sourceid][i]) < costs[i] ) {
-      	      // 	  costs[i] = costs[sourceid] + distances[pkt.sourceid][i];
-      	      // 	  is_changed = true;
-      	      // }
-
-      	      if(distances[src][des] + linkCosts[src] < costs[des] &&
-		 distances[src][des] != 0 &&
-		 des != myID){
-		  myGUI.println("Costs updated");
-      		  costs[des] = distances[src][des] + linkCosts[src]; 
-      		  is_changed = true; 
-      	      }
-      	  }
-      }
-
-      //update the firsthop 
-      int tmp; 
-      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
-	  tmp = linkCosts[i] + distances[i][pkt.destid];
-	  
-	  if(tmp < firstHop[i] && i != myID && is_neighbour[i]){
-	      firstHop[i] = linkCosts[i] + distances[i][pkt.destid];
-	  }
-      }
+		  // if our linkcost is the cheapers then just use that 
+		  if(linkCosts[des] < distances[myID][des]){
+		      is_changed = true; 
+		      distances[myID][des] = linkCosts[des]; 
+		      //costs = distances[myID];
+		      firstHop[des] = des; 
+		  }
 
 
-      //if anything changed, tell our neighbours what is up
-      //will the last constructed node get an incorrect array of neighbours? 
-      if(is_changed) {
-	  
-	  myGUI.println("bricksquad"); 
-	  //tell lies about cost
-	  int falsecosts[] = new int[RouterSimulator.NUM_NODES];
-	  System.arraycopy(costs, 0, falsecosts, 0, RouterSimulator.NUM_NODES); 
-	  
-	  if(poisonreverse){
-	      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
-		  //don't route back to anyone that isn't me 
-		  if( i != pkt.destid && i != pkt.sourceid ){
-		      falsecosts[i] = RouterSimulator.INFINITY; 
+		  //update the firsthops
+		  for(int indes = 0; indes < RouterSimulator.NUM_NODES; ++indes){
+		      //
+		      if( distances[myID][indes] > distances[myID][des] + distances[des][indes] 
+			  //&& linkCosts[des] != RouterSimulator.INFINITY
+			  )
+			  {
+			      is_changed = true; 
+			      distances[myID][indes] = distances[myID][des] + distances[des][indes];
+			      //costs = distances[myID];
+			      firstHop[indes] = firstHop[des]; 
+			  }
 		  }
 	      }
+
+	      // for(int indes = 0; des < RouterSimulator.NUM_NODES; ++des){
+	      // 	  if ( //distances[myID][des] > linkCosts[des] && 
+	      // 	      firstHop[des] == des )
+	      // 	      distances[myID][des] = linkCosts[des]; 
+	      // }
+	      
+	  
+	  
 	  }
 
-	  RouterPacket outgoing_pkt = new RouterPacket(myID, pkt.sourceid, falsecosts);
-	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
-	      outgoing_pkt.destid = i;
-	      if( is_neighbour[i] ) {
-		  sendUpdate(outgoing_pkt);
+
+   
+	  //if anything changed, tell our neighbours what is up
+	  //will the last constructed node get an incorrect array of neighbours? 
+	  if(is_changed) {
+	  
+	      myGUI.println("bricksquad"); 
+	      //tell lies about cost
+	      int falsecosts[] = new int[RouterSimulator.NUM_NODES];
+	      System.arraycopy(distances[myID], 0, falsecosts, 0, RouterSimulator.NUM_NODES); 
+	  
+	      RouterPacket outgoing_pkt = new RouterPacket(myID, pkt.sourceid, falsecosts);
+	      if(poisonreverse){
+	
+		  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
+		      for(int j = 0; j < RouterSimulator.NUM_NODES; ++j) {
+			  if(firstHop[j] == i)
+			      falsecosts[j] = RouterSimulator.INFINITY; 
+			  else
+			      falsecosts[j] = distances[myID][j]; 
+		      }
+		  }
+
 	      }
+	      else{
+		  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
+		      outgoing_pkt.destid = i;
+		      if( linkCosts[i] != RouterSimulator.INFINITY && i != myID) {
+			  sendUpdate(outgoing_pkt);
+		      }
+		  }
+	      }
+
 	  }
+
       }
 
       
       
 
-
-      // Poison reverse.
-      
-
-      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
-	  myGUI.print(Integer.toString(pkt.mincost[i]) + " "); 
-      }
-
-      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
-	  if((pkt.mincost[i] + costs[pkt.sourceid]) < costs[i] ) 
-	  {
-	      costs[i] = pkt.mincost[i] + costs[pkt.sourceid];  
-	  }
-      }
 
       
       printDistanceTable();
-      // SendUpdate
+
   }
   
 
@@ -203,27 +193,27 @@ public class RouterNode {
   private void sendUpdate(RouterPacket pkt) {
       sim.toLayer2(pkt); // Will run recive update on the next reciving node
 
-    
-
   }
   
 
   //--------------------------------------------------
   public void printDistanceTable() {
+
+
 	  myGUI.println("\n\nCurrent table for " + myID +
 			"  at time " + sim.getClocktime());
 	  myGUI.println("\nDistance table (Y is Destinations, X is sources)\n\t"); //or are they
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print("\t"+i); 
 	  }
-	  myGUI.print("\n--|-------------------------------------------------------");
-	  myGUI.print("-----------------------------------------------------------\n"); 
+	  myGUI.print("\n--|---------------------------------------------------");
+	  myGUI.print("-------------------------------------------------------\n"); 
 	  
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print(i +"|\t"); 
 	      for(int j = 0; j < RouterSimulator.NUM_NODES; ++j){
 
-	      myGUI.print(Integer.toString(distances[i][j])); 
+	      myGUI.print(Integer.toString(distances[j][i])); 
 	      myGUI.print("\t"); 
 	      }
 	      myGUI.println(""); 
@@ -232,94 +222,221 @@ public class RouterNode {
 
 
 
-	  myGUI.println("\nDistance vector\n\t\t"); //or are they
+	  myGUI.println("Distance vector"); //or are they
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print("\t"+i); 
 	  }
-	  myGUI.print("\n--|-------------------------------------------------------");
-	  myGUI.print("-----------------------------------------------------------\n\t"); 
+	  myGUI.print("\n--|---------------------------------------------------");
+	  myGUI.print("-------------------------------------------------------\n\t"); 
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
-	      myGUI.print(Integer.toString(costs[i]));
+	      myGUI.print(Integer.toString(distances[myID][i]));
 	      myGUI.print("\t"); 
 	  }
 	  myGUI.println(""); 
 
-	  myGUI.println("\nFirst Hop\n\t\t"); //or are they
+	  myGUI.println("First Hop"); //or are they
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print("\t"+i); 
 	  }
-	  myGUI.print("\n--|-------------------------------------------------------");
-	  myGUI.print("-----------------------------------------------------------\n\t"); 
+	  myGUI.print("\n--|---------------------------------------------------");
+	  myGUI.print("-------------------------------------------------------\n\t"); 
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print(Integer.toString(firstHop[i]));
 	      myGUI.print("\t"); 
 	  }
 
-	  myGUI.println("\nLink Cost\n\t\t"); //or are they
+	  myGUI.println("\nLink Cost"); //or are they
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print("\t"+i); 
 	  }
-	  myGUI.print("\n--|-------------------------------------------------------");
-	  myGUI.print("-----------------------------------------------------------\n\t"); 
+	  myGUI.print("\n--|---------------------------------------------------");
+	  myGUI.print("-------------------------------------------------------\n\t"); 
 	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i){
 	      myGUI.print(Integer.toString(linkCosts[i]));
 	      myGUI.print("\t"); 
 	  }
  
 
-	  myGUI.println(""); 
+	  //	  myGUI.println(""); 
   }
 
   //--------------------------------------------------
   public void updateLinkCost(int dest, int newcost) {
 
-      // Vi är i nod 1
-      // in kommer dest 2 , new cost 5
-      // cost = 5 + tiden mellan 1 och 2
-
-      //använd en tabell originalkostnader och lita inte på inskickade distancevektorer för korstatste vägen
-      int oldcost = linkCosts[dest]; 
-      if(linkCosts[dest] != newcost){
-	  linkCosts[dest] = newcost; 
+ 
+      linkCosts[dest] = newcost;
 
 
-	  // since our link costs changed, recalculate distance table
-	  // // if our distance table changed, sound the alarm
-
-	  
-	  // //	  for(int i = 0; i nod< RouterSimulator.NUM_NODES; ++i) {      
-	  for(int des = 0; des < RouterSimulator.NUM_NODES; ++des) {      
-	      if( (distances[myID][des] != linkCosts[des]) )
-	  	  {
-	  	      distances[myID][des] = linkCosts[des];
-		      costs[des] = linkCosts[des]; 
-	  	  }
-	  }
-	  
-
-	  RouterPacket outgoing_pkt = new RouterPacket(myID, 0, costs);
-	  for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
-	      outgoing_pkt.destid = i;
-	      if( is_neighbour[i] ) {
-		  sendUpdate(outgoing_pkt);
-	      }
+      // if we route directly, our new distance should be the cost of the direct route
+      if(firstHop[dest] == dest)
+	  {
+	      distances[myID][dest] = linkCosts[dest];
 	  }
 
+
+      // if we route indirectly, then our distance to the node, is our routing nodes distance
+      if(firstHop[dest] != RouterSimulator.INFINITY
+	 && distances[myID][dest] != distances[firstHop[dest]][dest] + distances[myID][firstHop[dest]])
+	  {
+	      distances[myID][dest] = distances[firstHop[dest]][dest] + distances[myID][firstHop[dest]];
+	  }
+
+      // if the direct cost is cheaper than our indirect route, then
+      // our new cost is the cost of the direct route.
+      if(linkCosts[dest] < distances[myID][dest]){
+	  distances[myID][dest] = linkCosts[dest];
+	  firstHop[dest] = dest; 
       }
       
+      // go through all destinations i via all indirect nodes dest. if
+      // that produces a cheaper route, then route through that
+      // inidrect node and update our routing
+      for (int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
+	  if (distances[myID][i] > distances[myID][dest] + distances[dest][i])
+	      {
+		  distances[myID][i] = distances[myID][dest] + distances[dest][i];
+		  firstHop[i] = firstHop[dest]; 
+	      }
+      }
+
+
+
+
+
       //tell you're are're friendZ :OK_HANDSIGN:
+      RouterPacket outgoing_pkt = new RouterPacket(myID, 0, distances[myID]);
+      for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {      
+	  outgoing_pkt.destid = i;
+	  if( linkCosts[i] != RouterSimulator.INFINITY && i != myID) {
+	      sendUpdate(outgoing_pkt);
+	  }
+      }
+
       printDistanceTable();
   }
 
     //
-    public void broadcast(int distancevector[]){
-	RouterPacket outgoing_pkt = new RouterPacket(myID, 0, costs);
-	for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
-	    outgoing_pkt.destid = i;
-	    sendUpdate(outgoing_pkt);
-	}
+    // public void broadcast(int distancevector[]){
+    // 	RouterPacket outgoing_pkt = new RouterPacket(myID, 0, costs);
+    // 	for(int i = 0; i < RouterSimulator.NUM_NODES; ++i) {
+    // 	    outgoing_pkt.destid = i;
+    // 	    sendUpdate(outgoing_pkt);
+    // 	}
 
-    }
+    // }
 
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+                                       +++++:
+                                     ++#@@@#++'
+                                   .+@@@##@@@#++
+                                  +#@+.,,,,.;@@#+'
+                                 +#@.,,,,.,.,,,@@++
+                               `#@;.,,,,,,,,,,,,'@@+,
+                              '@@,,,,,,,,,,,,,,,,.@@+,
+                             +@@.,,,,,,,,,,,,,,,,.,#@#;
+                            +@@.,,,,,,,,,,,,,,,,,,,.;@#'
+                          `+@@.,,,,,,,,,,,,,,,,,,,,,.:@#;
+                          +@@,.,,,,,,,,,,,,,,,,,,,,,..@@#:
+                        '+@@@.,.,,,,,,,,,,,,,,,,,,.@@@'@@#:
+                       '+@@..+@',,,,,,,,,,,,,,,,,#@',..,,@#
+                      '+@@,,,,.@@..,,,,,,,,,,,,.@@.,.,,,,.@+
+                     '+@@..,..,.,@@.,,,,,,,,,,+@'.,,,,,.,,;@+
+                     ++@.,.';..,..,#.,,,,,,,,,...,,,.'@@+.,@#`
+                    ++@;..@@@@+.,,.,,,,,,,.,.,,,,,..@@@@@,.:@+
+                   .++@..+@@@@@@.,,,,,,'.,.@.,,.,.,@@@@@@@.,@++
+                   +++@..@@@@@@@@:.,,.:@.@,.@.,,,@@@@@@@@@.,@#+
+                  ++++@..@@@@@@@@@@':+@,@@@..@@@@@@@@@@@@@:,##++
+                  +++#@..@@@@@@@@@@@@@.@@@@@..@@@@@@@@@@@@:,+@++;
+                 '+++@@,.@@@@@@@@@@@@.+@@'@@@..@@@@@@@@@@@.,;@+++
+                 ++++@@,.@@@@@@@@@@@..@@+.:@@..:@@@@@@@@@@,,,@+++,
+                ,++++@@.,@@@@@@@@@;,,,@@.,,@@.,..,;+++'+@@,,.@++++
+                ++++#@,,.@:.,,,...,,,.,,,,,,..,,,.,,,,,,.##,,@#+++'
+                ++++@@,.@.,,,,,,,,.,,,,.,,,.,.,,,..,.,,,,.::,+@++++
+               +++++@.,,,.,,,,,,,..,,,,,,,,,,,,,.#@.,,,,,,,,,.@++++:
+               ++++#@,,,,,,,,,,.#@,,.,.,,,,.,,,,,.@@..,,.,,,,,#@++++
+              `++++@:,,,,,,,,,,@@,,,,,,,,...,,,,,..@@.,.,,,,,,.@++++
+              +++++@.,,,,,,,,,@@,,,,,.+#.+@.,.,,,,,.@@,,,,,,,,.@#+++'
+              +++++@,,,,,,,,.@@,,,,..+#.@..@+.,,,,,,.@#..,,,,,,@@++++
+             ,++++#@.,,,,,,.@#..,..+#@.,@.,@:@,.,,,,,'@',,,,,.,@@++++
+             +++++@@,,,.,,.#@,.,,+@,,@,,@..#.,@@,,,,,.@@,,,,,,,@@++++'
+             +++++@@.,,,.,,@,,,.,:@..#.,#..#.,..@,,,,.@@@..,,,.@@+++++
+            `+++++@@.,,.,.@@.,,@@,..,+''@@@@,,,.@#;,,.@@@@,.,,.@@+++++
+            ++++++@@,.,..@@@,,#.@,.##@@@@@@@@@....;,,#@@@@#,,,#@@++++++
+            ++++++@@@,,,#@@@@.@.+.#@@@@@@@@@@@@:.,@.'@@@@@@.,.@@@++++++
+            +++++#@@@.,.@@@@@@@,'@@@@@@@@@@@@@@@,,@@@@@@@@@@.#@@@++++++
+           '+++++@@@@@.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+.@@@@@@@@#+++++:
+           ++++++@@@@@@@@@'@@@@@@@@@@@@@@@@@@@@@@@@@@@@..,@@@@@@@#++++++
+           ++++++@@@@@@@@..@@@@@@@@@..,.',...@@@@@@@@@@,,,,;@@@@@@++++++
+          `++++++@@@@@@@.,,@@@@@@@.#,,..@,,..;.@@@@@@@@.,,,,@@@@@@++++++
+          '+++++#@@@@@#.,,.@@@@@@.,@,;,,@.@..,,,,@@@@@',,.,,@@@@@@++++++`
+          ++++++@@@@@@.,,,.@@@@'..,@###..;.@#+.',@@@@@.,,,,;@@@@@@++++++'
+          ++++++@@@@@@.,,,.@@@@,.@+:,,,,,,,.,,@@.#@@@@.,,,,+@@@@@@+++++++
+         .++++++@@@@@@.,,,.@@@@@#:..,,.,,,,,,,..@@@@@@,,,,,@@@@@@@+++++++
+         +++++++@@@@@@.,,,.@@@@.,,,,,,,,,,,,,,,,,.@@@#,,,.,@@@@@@@+++++++
+         +++++++@@@@@@,,,,,;@@.,.,,,,,,,,,,,,,,,,..++.,,,.,@@@@@@@+++++++
+         ++++++#@@@@@@:,,,,,.,.,,,,,,,,,,,,,,,,,,.,,,,,,,,.@@@@@@@+++++++
+         ++++++@@@@@@@;,,,,,,,,,,,,,,,,,,,,,,,,,,,,.,,,,,.,@@@@@@@#++++++'
+        '++++++@@@@@@@;,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,:@@@@@@@#+++++++
+        +++++++@@@@@@@,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,:@@@@@@@#+++++++
+        +++++++@@@@@@@..,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,:@@@@@@@#+++++++
+        +++++++@@@@@@@..,,,,,,,,,,,.+@@@@@@@@@...,,,,,,,,,,@@@@@@@#+++++++
+       .+++++++@@@@@@@.,,,,,,,,,.,;@@@@@@@@@@@@+,.,,,,,,,,.@@@@@@@#+++++++
+       ;+++++++@@@@@@@.,,,,,,,,,,@@@@@@@@@@@@@@@@..,,,,,,,.@@@@@@@#+++++++
+       ++++++++@@@@@@@@.,,,,,,,.@@@@@@@@@@@@@@@@@@#.,,,,,.:@@@@@@@++++++++
+       +++++++#@@@@@@@@@.,,,,,'@@@@@@@@@@@@@@@@@@@@@..,,,,@@@@@@@@++++++++.
+       +++++++#@@@@@@@@@@..,,@@@@@@@@@@@@@@@@@@@@@@@@+::#@@@@@@@@@++++++++:
+      .+++++++#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++;
+      .+++++++#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++;
+      +++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++
+      +++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#+++++++++
+      +++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++++
+      +++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++++
+     '++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++
+     +++++++++++#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++
+     ++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++++++
+     +++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#++++++++++++'
+    '+++++++++++++#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++++++++
+    +++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++++++:
+   .++++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#++++++++++++++++
+   +``+++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++++++++++++
+   `:+++++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++++++++++`
+   +++++++++++++++++++#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++++++++++++
+  +++++++++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++++++++++++++
+ +++++++++++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#+++++++++++++++++++++++++
++++++++++++++++++++++++++@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#+++++++++++++++++++++++'++:
++      '++++++++++++++++++#@@@@@@@@@@@@@@@@@@@@@@@@@@++++++++++++++++++++'       '
+          +++++++++++++++++#@@@@@@@@@@@@@@@@@@@@@@@@+++++++++++++++++++.
+            '+++++++++++++++#@@@@@@@@@@@@@@@@@@@@@#++++++++++++++++++`
+              ;+++++++++++++++@@@@@@@@@@@@@@@@@@@++++++++++++++++++;
+                :++++++++++++++@@@@@@@@@@@@@@@@#+++++++++++++++++'
+                  '++++++++++++++@@@@@@@@@@@@#++++++++++++++++++
+                    ++++++++++++++#@@@@@@@@#++++++++++++++++++
+                      ;++++++++++++++#@@@@@@@@@+++++++++++++`
+                        .++++++++++++++++####+++++++++++++
+                           ;+++++++++++++++++++++++++++,
+                              ;+++++++++++++++++++++;
+                                 `,+++++++++++++,`
+*/
