@@ -38,31 +38,8 @@ void printbuf(const char *buf, size_t l); //prints a c string to cerr, but liter
 void printvector(vector<part> v); //loops through a vector of parts, print the buffers and their lenghts
 int sendall(int s, const char *buf, size_t *len);
 bool istextcheck(char *buf, int numbytes);
-bool ischunkcheck(char *buf){
-  string s{buf}; 
-
-  if(s.find("Transfer-Encoding: chunked") != string::npos) {
-    return true; 
-  }
-  return false; 
-}
-int clcheck(char *buf){
-  string s{buf};
-  size_t index = s.find("Content-Length");
-  size_t end{}; 
-  if(index != string::npos) {
-    index += 15;
-    index_end //it doesn't even matter
-      = s.find("\r", index); 
-
-    
-
-    string cl_number; 
-  }
-  
-
-  return -1; 
-}
+bool ischunkcheck(char *buf);
+int clcheck(char *buf);
 
 
 
@@ -253,14 +230,13 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     Get the hostname from the get request
   */
   string get_host{buf_server};
-  istringstream iss(get_host);
-  iss.ignore(100, '\n');
-  getline(iss, get_host);
-  istringstream iss2(get_host);
-  iss2.ignore(6, ' ');
-  iss2 >> get_host;
+  string host;
 
- 
+  int first, last;
+  first = get_host.find("Host: ") + 6;
+  last  = get_host.find("\r\n",first);
+  for(int i = first; i< last; ++i)
+    host.push_back(get_host.at(i));
 
   /*
     Change connection: keep-alive to Connection: close
@@ -284,8 +260,8 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
     Note: do we want to use another port than 80? 
   */
   int rv;
-  if ((rv = getaddrinfo( get_host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
-    fprintf(stderr, "internet getaddrinfo: %s\n", gai_strerror(rv));
+  if ((rv = getaddrinfo( host.c_str(), "80", &hints, &inet_servinfo)) != 0) {
+    fprintf(stderr, "internet getaddrinfo: %s on addr %s\n", gai_strerror(rv), get_host.c_str());
     exit(1);
   }
     
@@ -347,10 +323,15 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
 	contentlength = clcheck(buf_server); 
       }
 
+
+
       if(!istext){ //don't need to store nontext
        send(new_socket, buf_server, numbytes, 0 );
        continue;
       }
+
+
+
 
       part p; 
       char * tmp = new char[MAXDATASIZE]; 
@@ -360,16 +341,36 @@ void childtasks(struct addrinfo hints, struct addrinfo *p, int new_socket){
       p.c = tmp;
       p.l = numbytes;     
 
-      printbuf(p.c, p.l); 
+      //printbuf(p.c, p.l); 
       v.push_back(p); 
 
 
       totbuf_s.append(buf_server, numbytes); 
 
-      ++counter; 
+      
+
+      if(chunk){
+	totbuf_s.find("0\r\n\r\n"); 
+	cerr << " we are jheererhehr" << endl; 
+      	break;
+      }
+
+
+      if(contentlength != -1){
+	if(counter == 0){
+	  contentlength += (totbuf_s.find("\r\n\r\n") + 4);
+	}
+	contentlength -= numbytes; 
+
+	if(contentlength == 0){
+	  //we have gone through all the content
+	  break; 
+	}
+      }
+      ++counter;
 
     }
-
+  // printvector(v); 
 
   /*
     Filter the response
@@ -462,13 +463,16 @@ void printbuf(const char *buf, size_t l){
 
 void printvector(vector<part> v)
 {
+  int ekul{}; 
+
   cerr << "#############################################################\n" 
        << "#LENGTH OF VECTOR PARTS                                     #\n";
   for(auto i : v){
     cerr << "#" << i.l << "\n"; 
+    ekul += i.l; 
 
-    cerr << "#############################################################\n";
   }
+  cerr << "# total length = "<< ekul<<"\n#############################################################\n";
 
   for(auto i : v){
     cerr << "#############################################################\n" 
@@ -513,7 +517,42 @@ bool istextcheck(char *buf, int numbytes){
 
 
 
+bool ischunkcheck(char *buf){
+  string s{buf}; 
+  printbuf(buf, strlen(buf)); 
 
+  if(s.find("Transfer-Encoding: chunked") != string::npos) {
+    cerr << "its chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\nits chunk\n" << endl; 
+    return true; 
+  }
+    cerr << "its not chunk" << endl; 
+  return false; 
+}
+
+
+
+int clcheck(char *buf){
+  string s{buf};
+  size_t index;
+  index = s.find("Content-Length");
+  size_t index_end{}; 
+  int header_end{};
+  if(index != string::npos) {
+    printbuf(buf, strlen(buf)); 
+    index += 16;
+    index_end //it doesn't even matter
+      = s.find("\r", index); 
+    int i = index_end - index; 
+    string cl_number{};
+    cl_number.resize(i); 
+    copy(begin(s)+index, begin(s)+index_end, cl_number.begin());
+
+    header_end = s.find("\r\n\r\n") + 4; 
+
+    return stoi(cl_number);// - header_end; 
+  }
+    return -1; 
+}
 
 
 /*
