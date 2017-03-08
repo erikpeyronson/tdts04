@@ -1,0 +1,20 @@
+module ChatApp { 
+   interface ChatCallback {
+      void callback(in string message);
+   };
+   interface Chat {
+     string say(in ChatCallback objref, in string message); //using command post
+
+
+     // join should connect to the server ussing command "join". join
+     // should specify its name (to be used as username for that
+     // session). this should make a client active.
+     long join(in ChatCallback objref, in string usrname); 
+
+     // leave should undo the join
+
+     // list should give you a list of all active users.
+     string list(in ChatCallback objref); 
+     // string list(in ChatCallback objref); 
+   };
+};
